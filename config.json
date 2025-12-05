@@ -1,0 +1,20 @@
+{
+  "pocketbase": {
+    "url": "http://localhost:8090",
+    "collection": "photos"
+  },
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "photoDuration": 3,
+    "transitionDuration": 0.5,
+    "transition": "directionalwipe"
+  },
+  "audio": {
+    "bgmVolume": 0.3
+  },
+  "output": {
+    "directory": "./output"
+  }
+}
