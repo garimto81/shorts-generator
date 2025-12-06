@@ -12,9 +12,23 @@
     "transition": "directionalwipe"
   },
   "audio": {
-    "bgmVolume": 0.3
+    "bgmVolume": 0.3,
+    "defaultBgm": null
+  },
+  "branding": {
+    "logo": "./assets/logo.png",
+    "logoPosition": { "x": 0.92, "y": 0.05 },
+    "logoSize": 0.12,
+    "enabled": true
+  },
+  "subtitle": {
+    "font": "./assets/fonts/NotoSansKR-Bold.otf",
+    "fontSize": 60,
+    "textColor": "#FFFFFF",
+    "backgroundColor": "rgba(0,0,0,0.6)"
   },
   "output": {
-    "directory": "./output"
+    "directory": "./output",
+    "filenamePattern": "shorts_{timestamp}"
   }
 }
