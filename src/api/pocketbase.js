@@ -1,3 +1,4 @@
+import PocketBase from 'pocketbase';
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -7,34 +8,64 @@ const config = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'ut
 
 const API_URL = config.pocketbase.url;
 const COLLECTION = config.pocketbase.collection;
+const AUTH_CONFIG = config.pocketbase.auth;
 
+// PocketBase 클라이언트 초기화
+const pb = new PocketBase(API_URL);
+
+let isAuthenticated = false;
+
+/**
+ * Admin 로그인 (PocketBase SDK 사용)
+ */
+async function authenticate() {
+  if (isAuthenticated) return;
+
+  if (!AUTH_CONFIG?.email || !AUTH_CONFIG?.password) {
+    console.warn('인증 정보 없음, 비인증 모드로 진행');
+    return;
+  }
+
+  try {
+    // PocketBase v0.23+: admins -> _superusers collection
+    await pb.collection('_superusers').authWithPassword(
+      AUTH_CONFIG.email,
+      AUTH_CONFIG.password
+    );
+    isAuthenticated = true;
+    console.log('✓ PocketBase 로그인 성공');
+  } catch (err) {
+    console.warn('Admin 로그인 실패:', err.message);
+  }
+}
+
+/**
+ * 사진 목록 조회
+ */
 export async function fetchPhotos(options = {}) {
   const { limit = 50, since = null } = options;
 
-  let url = `${API_URL}/api/collections/${COLLECTION}/records?sort=-created&perPage=${limit}`;
+  await authenticate();
 
-  if (since) {
-    url += `&filter=${encodeURIComponent(`created >= "${since}"`)}`;
-  }
+  const filter = since ? `created >= "${since}"` : '';
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
+  const records = await pb.collection(COLLECTION).getList(1, limit, {
+    sort: '-created',
+    filter
+  });
 
-  const data = await response.json();
-
-  return data.items.map(item => ({
+  return records.items.map(item => ({
     id: item.id,
     title: item.title,
-    imageUrl: `${API_URL}/api/files/${COLLECTION}/${item.id}/${item.image}`,
-    thumbnailUrl: item.thumbnail
-      ? `${API_URL}/api/files/${COLLECTION}/${item.id}/${item.thumbnail}`
-      : null,
+    imageUrl: pb.files.getURL(item, item.image),
+    thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null,
     created: item.created
   }));
 }
 
+/**
+ * 이미지 다운로드
+ */
 export async function downloadImage(photo, destDir) {
   mkdirSync(destDir, { recursive: true });
 
@@ -51,3 +82,8 @@ export async function downloadImage(photo, destDir) {
 
   return filepath;
 }
+
+/**
+ * PocketBase 클라이언트 인스턴스 내보내기 (확장 용도)
+ */
+export { pb };

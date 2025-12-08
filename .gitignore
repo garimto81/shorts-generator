@@ -2,3 +2,9 @@ node_modules/
 temp/
 output/*.mp4
 *.log
+
+# Auth tokens
+.pb_token
+
+# PocketBase data
+pb_data/

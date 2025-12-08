@@ -1,0 +1,29 @@
+# Docker ignore file
+
+# Dependencies
+node_modules/
+
+# Output files
+output/*.mp4
+output/*.webm
+temp/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local

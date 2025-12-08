@@ -1,0 +1,31 @@
+# Shorts Generator - Docker Compose
+# Usage:
+#   docker-compose up -d pocketbase    # PocketBase 시작
+#   docker-compose run --rm shorts-gen list
+#   docker-compose run --rm shorts-gen create --auto
+
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: pocketbase
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pb_data:/pb_data
+    restart: unless-stopped
+
+  shorts-gen:
+    build: .
+    container_name: shorts-generator
+    depends_on:
+      - pocketbase
+    volumes:
+      - ./output:/app/output
+      - ./config.json:/app/config.json:ro
+      - ./assets/bgm:/app/assets/bgm:ro
+      - ./assets/fonts:/app/assets/fonts:ro
+    environment:
+      - NODE_ENV=production
+    # Use Docker network to access PocketBase
+    stdin_open: true
+    tty: true

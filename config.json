@@ -1,7 +1,11 @@
 {
   "pocketbase": {
-    "url": "http://localhost:8090",
-    "collection": "photos"
+    "url": "https://union-public.pockethost.io",
+    "collection": "photos",
+    "auth": {
+      "email": "aiden.kim@ggproduction.net",
+      "password": "qwer1234!@"
+    }
   },
   "video": {
     "width": 1080,

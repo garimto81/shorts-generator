@@ -1,6 +1,6 @@
 # Shorts Generator - 클라우드 이미지 → 쇼츠 영상 생성
 
-PC용 CLI 도구로 PocketBase에서 이미지를 가져와 마케팅 영상을 생성합니다.
+Docker 기반 CLI 도구로 PocketBase에서 이미지를 가져와 마케팅 영상을 생성합니다.
 
 ## Features
 
@@ -11,69 +11,55 @@ PC용 CLI 도구로 PocketBase에서 이미지를 가져와 마케팅 영상을 
 - 🏷️ 로고 오버레이 (우측 상단)
 - 🔄 Ken Burns 효과 (확대/축소)
 - ✨ 10종 전환 효과
+- 🐳 Docker 컨테이너 (FFmpeg/네이티브 의존성 포함)
 
 ## Prerequisites
 
-```bash
-# FFmpeg 설치 필수
-winget install FFmpeg
-# 또는
-choco install ffmpeg
-
-# 확인
-ffmpeg -version
-```
+- Docker Desktop
+- Docker Compose
 
 ## Setup
 
 ```bash
-# Install dependencies
-npm install
+# PocketBase 시작 (백그라운드)
+docker-compose up -d pocketbase
 
-# Global CLI registration (optional)
-npm link
-
-# Run directly
-node src/index.js list
-node src/index.js create
-
-# Or with global link
-shorts-gen list
-shorts-gen create
+# shorts-gen 이미지 빌드
+docker-compose build shorts-gen
 ```
 
 ## Commands
 
 ```bash
 # 사진 목록 조회
-shorts-gen list
-shorts-gen list --limit 10
-shorts-gen list --since 2025-12-01
+docker-compose run --rm shorts-gen list
+docker-compose run --rm shorts-gen list --limit 10
+docker-compose run --rm shorts-gen list --since 2025-12-01
 
-# 영상 생성 (대화형)
-shorts-gen create
+# 영상 생성 (대화형) - 반드시 -it 옵션 필요
+docker-compose run --rm -it shorts-gen create
 
 # 영상 생성 (자동 - 최신 5개)
-shorts-gen create --auto
-shorts-gen create --auto --count 10
+docker-compose run --rm shorts-gen create --auto
+docker-compose run --rm shorts-gen create --auto --count 10
 
 # ID로 사진 지정
-shorts-gen create --ids abc123,def456,ghi789
+docker-compose run --rm shorts-gen create --ids abc123,def456,ghi789
 
-# BGM 지정
-shorts-gen create --bgm ./my-bgm.mp3
+# BGM 지정 (컨테이너 내부 경로)
+docker-compose run --rm shorts-gen create --bgm /app/assets/bgm/music.mp3
 
 # 로고 비활성화
-shorts-gen create --no-logo
+docker-compose run --rm shorts-gen create --no-logo
 
 # 전환 효과 지정
-shorts-gen create --transition crossfade
+docker-compose run --rm shorts-gen create --transition crossfade
 
-# 출력 경로 지정
-shorts-gen create --output ./my-video.mp4
+# 출력 경로 지정 (컨테이너 내부 경로)
+docker-compose run --rm shorts-gen create --output /app/output/my-video.mp4
 
 # 설정 확인
-shorts-gen config
+docker-compose run --rm shorts-gen config
 ```
 
 ## Available Transitions
@@ -140,13 +126,15 @@ shorts-generator/
 
 ## Adding Assets
 
+호스트의 `assets/` 폴더가 컨테이너에 마운트됩니다 (읽기 전용).
+
 ### BGM Files
 
 BGM 파일을 `assets/bgm/` 폴더에 추가하면 대화형 모드에서 선택 가능:
 
 ```bash
-# 예시
 cp my-music.mp3 assets/bgm/
+# 컨테이너 내부 경로: /app/assets/bgm/my-music.mp3
 ```
 
 ### Logo
@@ -173,39 +161,44 @@ cp my-music.mp3 assets/bgm/
 Field Uploader (PRD-0013)에서 업로드한 사진을 사용합니다:
 
 ```
-스마트폰 (Field Uploader) → PocketBase → PC (Shorts Generator)
+스마트폰 (Field Uploader) → PocketBase → Docker (Shorts Generator)
      📷 촬영                   ☁️ 저장       🎬 영상 생성
 ```
 
+생성된 영상은 호스트의 `output/` 폴더에 저장됩니다.
+
 ## Troubleshooting
 
-### FFmpeg not found
+### PocketBase 연결 실패
 
 ```bash
-# PATH 확인
-ffmpeg -version
+# PocketBase 컨테이너 상태 확인
+docker-compose ps
 
-# Windows: 환경변수에 FFmpeg bin 경로 추가
-# 또는 재설치: winget install FFmpeg
+# PocketBase 재시작
+docker-compose restart pocketbase
+
+# 로그 확인
+docker-compose logs pocketbase
 ```
 
-### PocketBase connection failed
+### 영상 생성 실패
 
 ```bash
-# PocketBase 서버 실행 확인
-curl http://localhost:8090/api/health
+# shorts-gen 이미지 재빌드
+docker-compose build --no-cache shorts-gen
 
-# config.json의 URL 확인
-cat config.json | grep url
+# 컨테이너 로그 확인
+docker-compose logs shorts-gen
 ```
 
 ### 한글 깨짐
 
 ```bash
-# NotoSansKR 폰트 설치 확인
+# 폰트 파일 확인 (호스트)
 ls assets/fonts/
 
-# 폰트 파일 없으면 다운로드
+# NotoSansKR-Bold.otf 파일이 없으면 Google Fonts에서 다운로드
 ```
 
 ## License
