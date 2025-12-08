@@ -1,30 +1,42 @@
 # Shorts Generator - 클라우드 이미지 → 쇼츠 영상 생성
 
-Docker 기반 CLI 도구로 PocketBase에서 이미지를 가져와 마케팅 영상을 생성합니다.
+PocketHost.io 클라우드에서 이미지를 가져와 마케팅 영상을 생성하는 CLI 도구입니다.
 
 ## Features
 
-- 📷 PocketBase API 연동 (사진 목록 조회/다운로드)
+- 📷 PocketBase SDK 연동 (사진 목록 조회/다운로드)
 - 🎬 Editly 기반 1080x1920 영상 생성
 - 🎵 BGM 믹싱 (대화형 선택 또는 CLI 옵션)
 - 📝 한글 자막 (NotoSansKR 폰트)
 - 🏷️ 로고 오버레이 (우측 상단)
 - 🔄 Ken Burns 효과 (확대/축소)
 - ✨ 10종 전환 효과
+- ☁️ PocketHost.io 클라우드 백엔드
 - 🐳 Docker 컨테이너 (FFmpeg/네이티브 의존성 포함)
 
 ## Prerequisites
 
 - Docker Desktop
-- Docker Compose
+- PocketHost.io 계정 (https://pockethost.io)
 
 ## Setup
 
-```bash
-# PocketBase 시작 (백그라운드)
-docker-compose up -d pocketbase
+### 1. PocketHost 초기 설정
 
-# shorts-gen 이미지 빌드
+```bash
+# 1. PocketHost 대시보드에서 Superuser 생성
+#    https://union-public.pockethost.io/_/
+
+# 2. config.json에 인증 정보 설정
+#    pocketbase.auth.email / password
+
+# 3. photos 컬렉션 생성
+node scripts/setup-pocketbase.js
+```
+
+### 2. Docker 빌드
+
+```bash
 docker-compose build shorts-gen
 ```
 
@@ -55,11 +67,16 @@ docker-compose run --rm shorts-gen create --no-logo
 # 전환 효과 지정
 docker-compose run --rm shorts-gen create --transition crossfade
 
-# 출력 경로 지정 (컨테이너 내부 경로)
-docker-compose run --rm shorts-gen create --output /app/output/my-video.mp4
-
 # 설정 확인
 docker-compose run --rm shorts-gen config
+```
+
+### 로컬 개발 (Node.js + FFmpeg 필요)
+
+```bash
+npm install
+node src/index.js list
+node src/index.js create --auto
 ```
 
 ## Available Transitions
@@ -80,13 +97,15 @@ shorts-generator/
 ├── src/
 │   ├── index.js           # CLI 진입점
 │   ├── api/
-│   │   └── pocketbase.js  # PocketBase API 클라이언트
+│   │   └── pocketbase.js  # PocketBase SDK 클라이언트
 │   ├── video/
 │   │   ├── generator.js   # Editly 영상 생성
 │   │   ├── templates.js   # 영상 템플릿
 │   │   └── subtitle.js    # 자막 유틸리티
 │   └── utils/
 │       └── downloader.js  # 이미지 다운로더
+├── scripts/
+│   └── setup-pocketbase.js  # PocketBase 초기 설정
 ├── assets/
 │   ├── bgm/               # BGM 파일 (직접 추가)
 │   ├── fonts/             # 한글 폰트 (NotoSansKR)
@@ -99,10 +118,18 @@ shorts-generator/
 
 ## Configuration
 
-`config.json`에서 영상 설정 변경:
+`config.json`에서 설정 변경:
 
 ```json
 {
+  "pocketbase": {
+    "url": "https://union-public.pockethost.io",
+    "collection": "photos",
+    "auth": {
+      "email": "your-email@example.com",
+      "password": "your-password"
+    }
+  },
   "video": {
     "width": 1080,
     "height": 1920,
@@ -130,8 +157,6 @@ shorts-generator/
 
 ### BGM Files
 
-BGM 파일을 `assets/bgm/` 폴더에 추가하면 대화형 모드에서 선택 가능:
-
 ```bash
 cp my-music.mp3 assets/bgm/
 # 컨테이너 내부 경로: /app/assets/bgm/my-music.mp3
@@ -139,47 +164,41 @@ cp my-music.mp3 assets/bgm/
 
 ### Logo
 
-로고 이미지를 `assets/logo.png`로 저장:
-
 ```bash
 # PNG 권장 (투명 배경)
 # 크기: 200x200px 정도
+cp logo.png assets/logo.png
 ```
 
 ### Korean Font
 
-한글 자막용 폰트를 `assets/fonts/`에 추가:
-
 ```bash
 # NotoSansKR 다운로드
 # https://fonts.google.com/noto/specimen/Noto+Sans+KR
-# → NotoSansKR-Bold.otf 저장
+# → assets/fonts/NotoSansKR-Bold.otf
 ```
 
 ## Integration with Field Uploader
 
-Field Uploader (PRD-0013)에서 업로드한 사진을 사용합니다:
+Field Uploader에서 업로드한 사진을 사용합니다:
 
 ```
-스마트폰 (Field Uploader) → PocketBase → Docker (Shorts Generator)
-     📷 촬영                   ☁️ 저장       🎬 영상 생성
+스마트폰 (Field Uploader) → PocketHost.io → Docker (Shorts Generator)
+     📷 촬영                    ☁️ 저장        🎬 영상 생성
 ```
 
 생성된 영상은 호스트의 `output/` 폴더에 저장됩니다.
 
 ## Troubleshooting
 
-### PocketBase 연결 실패
+### PocketHost 연결 실패
 
 ```bash
-# PocketBase 컨테이너 상태 확인
-docker-compose ps
+# 서버 상태 확인
+curl https://union-public.pockethost.io/api/health
 
-# PocketBase 재시작
-docker-compose restart pocketbase
-
-# 로그 확인
-docker-compose logs pocketbase
+# config.json 인증 정보 확인
+cat config.json | grep -A3 auth
 ```
 
 ### 영상 생성 실패
@@ -195,7 +214,7 @@ docker-compose logs shorts-gen
 ### 한글 깨짐
 
 ```bash
-# 폰트 파일 확인 (호스트)
+# 폰트 파일 확인
 ls assets/fonts/
 
 # NotoSansKR-Bold.otf 파일이 없으면 Google Fonts에서 다운로드
