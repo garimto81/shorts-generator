@@ -75,6 +75,10 @@ export async function fetchPhotos(options = {}) {
 export async function downloadImage(photo, destDir) {
   mkdirSync(destDir, { recursive: true });
 
+  if (!photo.imageUrl) {
+    throw new Error(`Photo ${photo.id} has no image URL`);
+  }
+
   const response = await fetch(photo.imageUrl);
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status}`);

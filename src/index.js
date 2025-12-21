@@ -90,9 +90,10 @@ program
         }
 
         if (options.auto) {
-          // 자동 모드: 최신 N개
-          selectedPhotos = photos.slice(0, parseInt(options.count));
-          console.log(chalk.green(`✓ 최신 ${selectedPhotos.length}개 사진 선택됨`));
+          // 자동 모드: 최신 N개 (이미지가 있는 것만)
+          const validPhotos = photos.filter(p => p.imageUrl);
+          selectedPhotos = validPhotos.slice(0, parseInt(options.count));
+          console.log(chalk.green(`✓ 최신 ${selectedPhotos.length}개 사진 선택됨 (이미지 있음)`));
         } else {
           // 대화형 모드
           const choices = photos.map((p, i) => ({
