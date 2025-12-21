@@ -90,9 +90,10 @@ export async function generateVideo(photos, options = {}) {
   const transition = videoConfig.transition || 'fade';
 
   // Build input arguments
+  // Single frame input - zoompan will generate all output frames
   const inputArgs = [];
   photos.forEach(photo => {
-    inputArgs.push('-loop', '1', '-t', String(duration), '-i', photo.localPath);
+    inputArgs.push('-loop', '1', '-framerate', '1', '-t', '1', '-i', photo.localPath);
   });
 
   // Add logo input if enabled
