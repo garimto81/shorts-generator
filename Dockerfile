@@ -12,8 +12,11 @@ RUN apt-get update && apt-get install -y \
     libgif-dev \
     librsvg2-dev \
     libgl1-mesa-dev \
+    libgl1-mesa-glx \
+    libegl1-mesa \
     libxi-dev \
     libxext-dev \
+    xvfb \
     pkg-config \
     build-essential \
     python3 \

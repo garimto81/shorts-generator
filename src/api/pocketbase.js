@@ -45,19 +45,25 @@ async function authenticate() {
 export async function fetchPhotos(options = {}) {
   const { limit = 50, since = null } = options;
 
-  await authenticate();
+  // 공개 API로 먼저 시도, 실패 시 인증 후 재시도
+  const queryOptions = {};
+  if (since) {
+    queryOptions.filter = `created >= "${since}"`;
+  }
 
-  const filter = since ? `created >= "${since}"` : '';
-
-  const records = await pb.collection(COLLECTION).getList(1, limit, {
-    sort: '-created',
-    filter
-  });
+  let records;
+  try {
+    records = await pb.collection(COLLECTION).getList(1, limit, queryOptions);
+  } catch (err) {
+    // 인증 필요 시 재시도
+    await authenticate();
+    records = await pb.collection(COLLECTION).getList(1, limit, queryOptions);
+  }
 
   return records.items.map(item => ({
     id: item.id,
     title: item.title,
-    imageUrl: pb.files.getURL(item, item.image),
+    imageUrl: item.image ? pb.files.getURL(item, item.image) : null,
     thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null,
     created: item.created
   }));

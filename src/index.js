@@ -160,14 +160,20 @@ program
       const outputPath = options.output ||
         join(__dirname, '..', config.output.directory, `shorts_${timestamp}.mp4`);
 
+      // 로고 경로 결정
+      let logoPath = null;
+      if (options.logo !== false) {
+        logoPath = options.logo || join(__dirname, '..', config.branding.logo);
+      }
+
       // 영상 생성
-      const genSpinner = ora('🎬 영상 생성 중... (FFmpeg 실행)').start();
+      const genSpinner = ora('🎬 영상 생성 중... (FFmpeg filter_complex)').start();
 
       try {
         await generateVideo(selectedPhotos, {
           outputPath,
           bgmPath: options.bgm,
-          logoPath: options.logo === false ? null : options.logo,
+          logoPath,
           config: {
             ...config,
             video: {
