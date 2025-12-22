@@ -36,8 +36,44 @@ async function setup() {
     process.exit(1);
   }
 
-  // 2. photos 컬렉션 확인/생성
-  console.log('\n2️⃣ photos 컬렉션 확인...');
+  // 2. photo_groups 컬렉션 확인/생성
+  console.log('\n2️⃣ photo_groups 컬렉션 확인...');
+  let photoGroupsId = null;
+  try {
+    const existing = await pb.collections.getOne('photo_groups');
+    console.log('✅ photo_groups 컬렉션 이미 존재');
+    photoGroupsId = existing.id;
+  } catch (err) {
+    if (err.status === 404) {
+      console.log('📦 photo_groups 컬렉션 생성 중...');
+
+      const created = await pb.collections.create({
+        name: 'photo_groups',
+        type: 'base',
+        schema: [
+          {
+            name: 'title',
+            type: 'text',
+            required: true,
+            options: { min: 1, max: 200 }
+          }
+        ],
+        listRule: '',
+        viewRule: '',
+        createRule: '',
+        updateRule: '',
+        deleteRule: ''
+      });
+
+      photoGroupsId = created.id;
+      console.log('✅ photo_groups 컬렉션 생성 완료');
+    } else {
+      throw err;
+    }
+  }
+
+  // 3. photos 컬렉션 확인/생성
+  console.log('\n3️⃣ photos 컬렉션 확인...');
   try {
     const existing = await pb.collections.getOne('photos');
     console.log('✅ photos 컬렉션 이미 존재');
@@ -74,13 +110,25 @@ async function setup() {
               maxSize: 1048576,
               mimeTypes: ['image/jpeg', 'image/png', 'image/webp']
             }
+          },
+          {
+            name: 'group',
+            type: 'relation',
+            required: false,
+            options: {
+              collectionId: photoGroupsId,
+              cascadeDelete: false,
+              minSelect: null,
+              maxSelect: 1,
+              displayFields: ['title']
+            }
           }
         ],
-        listRule: '',      // 공개 읽기
-        viewRule: '',      // 공개 조회
-        createRule: '',    // 공개 생성
-        updateRule: '',    // 공개 수정
-        deleteRule: ''     // 공개 삭제
+        listRule: '',
+        viewRule: '',
+        createRule: '',
+        updateRule: '',
+        deleteRule: ''
       });
 
       console.log('✅ photos 컬렉션 생성 완료');
@@ -89,8 +137,8 @@ async function setup() {
     }
   }
 
-  // 3. 컬렉션 정보 출력
-  console.log('\n3️⃣ 컬렉션 정보 확인...');
+  // 4. 컬렉션 정보 출력
+  console.log('\n4️⃣ 컬렉션 정보 확인...');
   const collections = await pb.collections.getFullList();
   console.log(`📋 총 ${collections.length}개 컬렉션:`);
   collections.forEach(c => {
