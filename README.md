@@ -1,40 +1,37 @@
-# Shorts Generator - 클라우드 이미지 → 쇼츠 영상 생성
+# Shorts Generator - 사진 → 쇼츠 영상 생성
 
-PocketHost.io 클라우드에서 이미지를 가져와 마케팅 영상을 생성하는 CLI 도구입니다.
+PocketBase에서 사진을 가져와 마케팅 영상을 생성하는 CLI 도구입니다.
 
 ## Features
 
-- 📷 PocketBase SDK 연동 (사진 목록 조회/다운로드)
-- 🎬 FFmpeg 기반 1080x1920 영상 생성
+- 📷 PocketBase SDK 연동 (그룹/사진 조회/다운로드)
+- 📁 그룹별 사진 관리 (photo_groups 지원)
+- 🎬 FFmpeg 기반 1080x1920 세로 영상 생성
 - 🎵 BGM 믹싱 (대화형 선택 또는 CLI 옵션)
 - 📝 한글 자막 (NotoSansKR 폰트)
 - 🏷️ 로고 오버레이 (우측 상단)
-- 🔄 Ken Burns 효과 (확대/축소)
-- ✨ 10종 전환 효과
-- ☁️ PocketHost.io 클라우드 백엔드
-- 🐳 Docker 컨테이너 (FFmpeg/네이티브 의존성 포함)
+- 🔄 Ken Burns 효과 (확대/축소 교차)
+- ✨ 10종 전환 효과 (xfade)
+- 🐳 Docker 컨테이너 (FFmpeg 포함)
 
 ## Prerequisites
 
-- Docker Desktop
-- PocketHost.io 계정 (https://pockethost.io)
+- Docker Desktop (권장) 또는 Node.js 18+ / FFmpeg
+- PocketBase 서버 (로컬 또는 클라우드)
 
 ## Setup
 
-### 1. PocketHost 초기 설정
+### 1. PocketBase 시작
 
 ```bash
-# 1. PocketHost 대시보드에서 Superuser 생성
-#    https://union-public.pockethost.io/_/
+# Docker Compose로 로컬 PocketBase 시작
+docker-compose up -d pocketbase
 
-# 2. config.json에 인증 정보 설정
-#    pocketbase.auth.email / password
-
-# 3. photos 컬렉션 생성
-node scripts/setup-pocketbase.js
+# 상태 확인
+curl http://localhost:8090/api/health
 ```
 
-### 2. Docker 빌드
+### 2. shorts-gen 빌드
 
 ```bash
 docker-compose build shorts-gen
@@ -43,40 +40,41 @@ docker-compose build shorts-gen
 ## Commands
 
 ```bash
+# 그룹 목록 조회
+docker-compose run --rm shorts-gen groups
+
 # 사진 목록 조회
 docker-compose run --rm shorts-gen list
+docker-compose run --rm shorts-gen list --group <group-id>  # 특정 그룹
 docker-compose run --rm shorts-gen list --limit 10
-docker-compose run --rm shorts-gen list --since 2025-12-01
 
-# 영상 생성 (대화형) - 반드시 -it 옵션 필요
+# 영상 생성 (대화형) - 그룹 선택 → 사진 선택
 docker-compose run --rm -it shorts-gen create
 
-# 영상 생성 (자동 - 최신 5개)
+# 영상 생성 (자동)
 docker-compose run --rm shorts-gen create --auto
+docker-compose run --rm shorts-gen create --group <id> --auto  # 특정 그룹
 docker-compose run --rm shorts-gen create --auto --count 10
 
 # ID로 사진 지정
 docker-compose run --rm shorts-gen create --ids abc123,def456,ghi789
 
-# BGM 지정 (컨테이너 내부 경로)
+# 옵션
 docker-compose run --rm shorts-gen create --bgm /app/assets/bgm/music.mp3
-
-# 로고 비활성화
 docker-compose run --rm shorts-gen create --no-logo
-
-# 전환 효과 지정
 docker-compose run --rm shorts-gen create --transition crossfade
 
 # 설정 확인
 docker-compose run --rm shorts-gen config
 ```
 
-### 로컬 개발 (Node.js + FFmpeg 필요)
+### 로컬 개발 (Node.js 18+ / FFmpeg 필수)
 
 ```bash
 npm install
-node src/index.js list
-node src/index.js create --auto
+node src/index.js groups                    # 그룹 목록
+node src/index.js list --group <id>         # 그룹별 사진
+node src/index.js create --group <id> --auto  # 그룹 영상 생성
 ```
 
 ## Available Transitions
@@ -123,18 +121,16 @@ shorts-generator/
 ```json
 {
   "pocketbase": {
-    "url": "https://union-public.pockethost.io",
+    "url": "http://localhost:8090",
     "collection": "photos",
-    "auth": {
-      "email": "your-email@example.com",
-      "password": "your-password"
-    }
+    "auth": null
   },
   "video": {
     "width": 1080,
     "height": 1920,
     "fps": 30,
     "photoDuration": 3,
+    "transitionDuration": 0.5,
     "transition": "directionalwipe"
   },
   "branding": {
@@ -180,25 +176,42 @@ cp logo.png assets/logo.png
 
 ## Integration with Field Uploader
 
-Field Uploader에서 업로드한 사진을 사용합니다:
+Field Uploader에서 업로드한 사진을 그룹별로 관리하고 영상을 생성합니다:
 
 ```
-스마트폰 (Field Uploader) → PocketHost.io → Docker (Shorts Generator)
-     📷 촬영                    ☁️ 저장        🎬 영상 생성
+📱 Field Uploader → 🗄️ PocketBase → 🎬 Shorts Generator
+   (사진 촬영)       (localhost:8090)    (영상 생성)
+       ↓                  ↓                  ↓
+   photo_groups      photo_groups      groups 조회
+   photos 업로드     photos 저장      --group <id>
 ```
 
-생성된 영상은 호스트의 `output/` 폴더에 저장됩니다.
+**연동 예시:**
+
+```bash
+# 1. Field Uploader에서 "제품A" 그룹으로 사진 업로드
+
+# 2. shorts-generator에서 그룹 확인
+node src/index.js groups
+# → [1] 제품A (abc123xyz)
+
+# 3. 해당 그룹으로 영상 생성
+node src/index.js create --group abc123xyz --auto
+# → output/shorts_제품A_2025-12-22T12-00-00.mp4
+```
+
+생성된 영상은 `output/` 폴더에 저장됩니다.
 
 ## Troubleshooting
 
-### PocketHost 연결 실패
+### PocketBase 연결 실패
 
 ```bash
 # 서버 상태 확인
-curl https://union-public.pockethost.io/api/health
+curl http://localhost:8090/api/health
 
-# config.json 인증 정보 확인
-cat config.json | grep -A3 auth
+# Docker로 PocketBase 시작
+docker-compose up -d pocketbase
 ```
 
 ### 영상 생성 실패
