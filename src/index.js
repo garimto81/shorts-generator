@@ -7,6 +7,7 @@ import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './a
 import { generateVideo, TRANSITIONS } from './video/generator.js';
 import { generateThumbnail } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
+import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -106,6 +107,8 @@ program
   .option('--thumbnail', '영상 생성 후 썸네일 자동 생성')
   .option('--thumbnail-pos <pos>', '썸네일 위치 (start/middle/end 또는 초)', 'middle')
   .option('-t, --template <name>', '영상 템플릿 (classic, dynamic, elegant, minimal, quick, cinematic 등)')
+  .option('--preview', '저해상도 미리보기 영상만 생성')
+  .option('--preview-quality <quality>', '미리보기 품질 (fast/balanced/quality)', 'fast')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -317,44 +320,70 @@ program
         videoConfig.video.transition = options.transition;
       }
 
-      // 영상 생성
-      const genSpinner = ora('🎬 영상 생성 중... (FFmpeg filter_complex)').start();
+      // 미리보기 모드 또는 일반 영상 생성
+      if (options.preview) {
+        const previewQuality = options.previewQuality || 'fast';
+        const previewPreset = PREVIEW_PRESETS[previewQuality] || PREVIEW_PRESETS.fast;
+        const estimatedTime = estimatePreviewTime(selectedPhotos.length, previewQuality);
 
-      try {
-        await generateVideo(selectedPhotos, {
-          outputPath,
-          bgmPath: options.bgm,
-          logoPath,
-          config: videoConfig
-        });
-        genSpinner.succeed(chalk.green(`✅ 영상 생성 완료!`));
-        console.log(`\n📁 출력 파일: ${chalk.cyan(outputPath)}`);
-        console.log(`📐 해상도: ${videoConfig.video.width}x${videoConfig.video.height}`);
-        console.log(`⏱️  총 길이: ~${selectedPhotos.length * videoConfig.video.photoDuration}초`);
-        if (options.template) {
-          console.log(`🎨 템플릿: ${TEMPLATES[options.template].name}`);
+        const previewSpinner = ora(`🎬 미리보기 생성 중... (${previewPreset.name}, ${estimatedTime})`).start();
+
+        try {
+          const previewPath = outputPath.replace('.mp4', '_preview.mp4');
+          await generatePreview(selectedPhotos, {
+            outputPath: previewPath,
+            config: videoConfig,
+            quality: previewQuality
+          });
+          previewSpinner.succeed(chalk.green('✅ 미리보기 생성 완료!'));
+          console.log(`\n📁 미리보기: ${chalk.cyan(previewPath)}`);
+          console.log(`📐 해상도: ${previewPreset.width}x${previewPreset.height}`);
+          console.log(`⏱️  총 길이: ~${selectedPhotos.length * videoConfig.video.photoDuration}초`);
+          console.log(chalk.dim('💡 미리보기 확인 후 --preview 없이 실행하면 고해상도 영상 생성'));
+        } catch (previewErr) {
+          previewSpinner.fail('미리보기 생성 실패');
+          console.error(chalk.red('\n오류 상세:'), previewErr.message);
         }
+      } else {
+        // 일반 영상 생성
+        const genSpinner = ora('🎬 영상 생성 중... (FFmpeg filter_complex)').start();
 
-        // 썸네일 생성
-        if (options.thumbnail) {
-          const thumbSpinner = ora('🖼️  썸네일 생성 중...').start();
-          try {
-            const position = isNaN(options.thumbnailPos) ? options.thumbnailPos : parseFloat(options.thumbnailPos);
-            const thumbPath = await generateThumbnail(outputPath, null, {
-              position,
-              width: config.video.width,
-              height: config.video.height
-            });
-            thumbSpinner.succeed(chalk.green('✅ 썸네일 생성 완료!'));
-            console.log(`🖼️  썸네일: ${chalk.cyan(thumbPath)}`);
-          } catch (thumbErr) {
-            thumbSpinner.fail('썸네일 생성 실패: ' + thumbErr.message);
+        try {
+          await generateVideo(selectedPhotos, {
+            outputPath,
+            bgmPath: options.bgm,
+            logoPath,
+            config: videoConfig
+          });
+          genSpinner.succeed(chalk.green(`✅ 영상 생성 완료!`));
+          console.log(`\n📁 출력 파일: ${chalk.cyan(outputPath)}`);
+          console.log(`📐 해상도: ${videoConfig.video.width}x${videoConfig.video.height}`);
+          console.log(`⏱️  총 길이: ~${selectedPhotos.length * videoConfig.video.photoDuration}초`);
+          if (options.template) {
+            console.log(`🎨 템플릿: ${TEMPLATES[options.template].name}`);
           }
+
+          // 썸네일 생성
+          if (options.thumbnail) {
+            const thumbSpinner = ora('🖼️  썸네일 생성 중...').start();
+            try {
+              const position = isNaN(options.thumbnailPos) ? options.thumbnailPos : parseFloat(options.thumbnailPos);
+              const thumbPath = await generateThumbnail(outputPath, null, {
+                position,
+                width: config.video.width,
+                height: config.video.height
+              });
+              thumbSpinner.succeed(chalk.green('✅ 썸네일 생성 완료!'));
+              console.log(`🖼️  썸네일: ${chalk.cyan(thumbPath)}`);
+            } catch (thumbErr) {
+              thumbSpinner.fail('썸네일 생성 실패: ' + thumbErr.message);
+            }
+          }
+        } catch (genErr) {
+          genSpinner.fail('영상 생성 실패');
+          console.error(chalk.red('\n오류 상세:'), genErr.message);
+          console.log(chalk.dim('\nFFmpeg가 설치되어 있는지 확인하세요: ffmpeg -version'));
         }
-      } catch (genErr) {
-        genSpinner.fail('영상 생성 실패');
-        console.error(chalk.red('\n오류 상세:'), genErr.message);
-        console.log(chalk.dim('\nFFmpeg가 설치되어 있는지 확인하세요: ffmpeg -version'));
       }
 
     } catch (err) {
