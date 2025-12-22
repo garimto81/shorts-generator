@@ -5,6 +5,7 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
 import { generateVideo, TRANSITIONS } from './video/generator.js';
+import { generateThumbnail } from './video/thumbnail.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -101,6 +102,8 @@ program
   .option('--no-logo', '로고 비활성화')
   .option('--transition <name>', '전환 효과', 'directionalwipe')
   .option('--ids <ids>', '사진 ID 목록 (쉼표 구분)')
+  .option('--thumbnail', '영상 생성 후 썸네일 자동 생성')
+  .option('--thumbnail-pos <pos>', '썸네일 위치 (start/middle/end 또는 초)', 'middle')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -315,6 +318,23 @@ program
         console.log(`\n📁 출력 파일: ${chalk.cyan(outputPath)}`);
         console.log(`📐 해상도: ${config.video.width}x${config.video.height}`);
         console.log(`⏱️  총 길이: ~${selectedPhotos.length * config.video.photoDuration}초`);
+
+        // 썸네일 생성
+        if (options.thumbnail) {
+          const thumbSpinner = ora('🖼️  썸네일 생성 중...').start();
+          try {
+            const position = isNaN(options.thumbnailPos) ? options.thumbnailPos : parseFloat(options.thumbnailPos);
+            const thumbPath = await generateThumbnail(outputPath, null, {
+              position,
+              width: config.video.width,
+              height: config.video.height
+            });
+            thumbSpinner.succeed(chalk.green('✅ 썸네일 생성 완료!'));
+            console.log(`🖼️  썸네일: ${chalk.cyan(thumbPath)}`);
+          } catch (thumbErr) {
+            thumbSpinner.fail('썸네일 생성 실패: ' + thumbErr.message);
+          }
+        }
       } catch (genErr) {
         genSpinner.fail('영상 생성 실패');
         console.error(chalk.red('\n오류 상세:'), genErr.message);
@@ -323,6 +343,37 @@ program
 
     } catch (err) {
       console.error(chalk.red('오류:'), err.message);
+      console.error(chalk.dim(err.stack));
+    }
+  });
+
+// Thumbnail command
+program
+  .command('thumbnail <video>')
+  .description('기존 영상에서 썸네일 생성')
+  .option('-o, --output <path>', '출력 경로')
+  .option('-p, --position <pos>', '위치 (start/middle/end 또는 초)', 'middle')
+  .action(async (videoPath, options) => {
+    const spinner = ora('🖼️  썸네일 생성 중...').start();
+    try {
+      if (!existsSync(videoPath)) {
+        spinner.fail(`파일을 찾을 수 없습니다: ${videoPath}`);
+        return;
+      }
+
+      const position = isNaN(options.position) ? options.position : parseFloat(options.position);
+      const thumbPath = await generateThumbnail(videoPath, options.output, {
+        position,
+        width: config.video.width,
+        height: config.video.height
+      });
+
+      spinner.succeed(chalk.green('✅ 썸네일 생성 완료!'));
+      console.log(`\n🖼️  출력 파일: ${chalk.cyan(thumbPath)}`);
+      console.log(`📐 해상도: ${config.video.width}x${config.video.height}`);
+      console.log(`📍 위치: ${options.position}`);
+    } catch (err) {
+      spinner.fail('썸네일 생성 실패: ' + err.message);
       console.error(chalk.dim(err.stack));
     }
   });
