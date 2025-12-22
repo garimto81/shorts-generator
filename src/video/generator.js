@@ -3,6 +3,7 @@ import { fileURLToPath } from 'url';
 import { mkdirSync, existsSync, writeFileSync, unlinkSync } from 'fs';
 import { spawn } from 'child_process';
 import { formatSubtitle, SUBTITLE_STYLE } from './subtitle.js';
+import { SUBTITLE_POSITIONS, SUBTITLE_STYLES } from './templates.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +79,7 @@ export async function generateVideo(photos, options = {}) {
   const videoConfig = config.video;
   const brandingConfig = config.branding || {};
   const subtitleConfig = config.subtitle || {};
+  const templateConfig = config.template || {};
 
   // Ensure output directory exists
   mkdirSync(dirname(outputPath), { recursive: true });
@@ -88,6 +90,13 @@ export async function generateVideo(photos, options = {}) {
   const fps = videoConfig.fps || 30;
   const transitionDuration = videoConfig.transitionDuration || 0.5;
   const transition = videoConfig.transition || 'fade';
+
+  // Template settings
+  const useKenBurns = templateConfig.kenBurns !== false;
+  const zoomIntensity = templateConfig.zoomIntensity ?? 0.15;
+  const subtitlePosition = templateConfig.subtitlePosition || 'bottom';
+  const subtitleStyleName = templateConfig.subtitleStyle || 'default';
+  const subtitleStyle = SUBTITLE_STYLES[subtitleStyleName] || SUBTITLE_STYLES.default;
 
   // Build input arguments
   // Single frame input - zoompan will generate all output frames
@@ -116,19 +125,29 @@ export async function generateVideo(photos, options = {}) {
   for (let i = 0; i < photoCount; i++) {
     const photo = photos[i];
 
-    // Ken Burns: alternating zoom in/out
-    const zoomDirection = i % 2 === 0 ? 'in' : 'out';
-    const zoomStart = zoomDirection === 'in' ? 1.0 : 1.15;
-    const zoomEnd = zoomDirection === 'in' ? 1.15 : 1.0;
-    const zoomExpr = `${zoomStart}+(${zoomEnd}-${zoomStart})*on/(${duration}*${fps})`;
+    if (useKenBurns && zoomIntensity > 0) {
+      // Ken Burns: alternating zoom in/out
+      const zoomDirection = i % 2 === 0 ? 'in' : 'out';
+      const zoomStart = zoomDirection === 'in' ? 1.0 : (1.0 + zoomIntensity);
+      const zoomEnd = zoomDirection === 'in' ? (1.0 + zoomIntensity) : 1.0;
+      const zoomExpr = `${zoomStart}+(${zoomEnd}-${zoomStart})*on/(${duration}*${fps})`;
 
-    // Scale with Ken Burns (zoompan)
-    filters.push(
-      `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,` +
-      `crop=${width * 2}:${height * 2},` +
-      `zoompan=z='${zoomExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${duration * fps}:s=${width}x${height}:fps=${fps},` +
-      `setsar=1[v${i}]`
-    );
+      // Scale with Ken Burns (zoompan)
+      filters.push(
+        `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,` +
+        `crop=${width * 2}:${height * 2},` +
+        `zoompan=z='${zoomExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${duration * fps}:s=${width}x${height}:fps=${fps},` +
+        `setsar=1[v${i}]`
+      );
+    } else {
+      // No Ken Burns - simple scale and duration
+      filters.push(
+        `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+        `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
+        `loop=loop=${duration * fps}:size=1:start=0,` +
+        `setpts=PTS-STARTPTS,fps=${fps},setsar=1[v${i}]`
+      );
+    }
   }
 
   // 2. Add subtitles to each video segment
@@ -138,17 +157,18 @@ export async function generateVideo(photos, options = {}) {
 
     if (subtitle) {
       const fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
-      const fontSize = subtitleConfig.fontSize || 60;
+      const fontSize = subtitleConfig.fontSize || subtitleStyle.fontSize || 60;
       const textColor = hexToFFmpegColor(subtitleConfig.textColor || '#FFFFFF');
+      const borderWidth = subtitleStyle.borderWidth || 3;
       const escapedText = escapeText(subtitle);
 
-      // Position: bottom center with padding
-      const yPos = `h-h/10`;
+      // Position based on template setting
+      const yPos = SUBTITLE_POSITIONS[subtitlePosition] || SUBTITLE_POSITIONS.bottom;
 
       filters.push(
         `[v${i}]drawtext=fontfile='${fontPath}':text='${escapedText}':` +
         `fontsize=${fontSize}:fontcolor=${textColor}:` +
-        `borderw=3:bordercolor=black:` +
+        `borderw=${borderWidth}:bordercolor=black:` +
         `x=(w-text_w)/2:y=${yPos}[vt${i}]`
       );
     } else {

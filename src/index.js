@@ -6,6 +6,7 @@ import inquirer from 'inquirer';
 import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
 import { generateVideo, TRANSITIONS } from './video/generator.js';
 import { generateThumbnail } from './video/thumbnail.js';
+import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -104,6 +105,7 @@ program
   .option('--ids <ids>', '사진 ID 목록 (쉼표 구분)')
   .option('--thumbnail', '영상 생성 후 썸네일 자동 생성')
   .option('--thumbnail-pos <pos>', '썸네일 위치 (start/middle/end 또는 초)', 'middle')
+  .option('-t, --template <name>', '영상 템플릿 (classic, dynamic, elegant, minimal, quick, cinematic 등)')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -298,6 +300,23 @@ program
         logoPath = options.logo || join(__dirname, '..', config.branding.logo);
       }
 
+      // 템플릿 적용
+      let videoConfig = config;
+      if (options.template) {
+        if (!TEMPLATES[options.template]) {
+          console.log(chalk.yellow(`⚠️  알 수 없는 템플릿: ${options.template}`));
+          console.log(chalk.dim(`사용 가능: ${getTemplateNames().join(', ')}`));
+          return;
+        }
+        videoConfig = applyTemplate(config, options.template);
+        console.log(chalk.cyan(`🎨 템플릿 적용: ${TEMPLATES[options.template].name}`));
+      }
+
+      // CLI 옵션으로 전환 효과 오버라이드
+      if (options.transition && options.transition !== 'directionalwipe') {
+        videoConfig.video.transition = options.transition;
+      }
+
       // 영상 생성
       const genSpinner = ora('🎬 영상 생성 중... (FFmpeg filter_complex)').start();
 
@@ -306,18 +325,15 @@ program
           outputPath,
           bgmPath: options.bgm,
           logoPath,
-          config: {
-            ...config,
-            video: {
-              ...config.video,
-              transition: options.transition
-            }
-          }
+          config: videoConfig
         });
         genSpinner.succeed(chalk.green(`✅ 영상 생성 완료!`));
         console.log(`\n📁 출력 파일: ${chalk.cyan(outputPath)}`);
-        console.log(`📐 해상도: ${config.video.width}x${config.video.height}`);
-        console.log(`⏱️  총 길이: ~${selectedPhotos.length * config.video.photoDuration}초`);
+        console.log(`📐 해상도: ${videoConfig.video.width}x${videoConfig.video.height}`);
+        console.log(`⏱️  총 길이: ~${selectedPhotos.length * videoConfig.video.photoDuration}초`);
+        if (options.template) {
+          console.log(`🎨 템플릿: ${TEMPLATES[options.template].name}`);
+        }
 
         // 썸네일 생성
         if (options.thumbnail) {
@@ -376,6 +392,31 @@ program
       spinner.fail('썸네일 생성 실패: ' + err.message);
       console.error(chalk.dim(err.stack));
     }
+  });
+
+// Templates command
+program
+  .command('templates')
+  .description('사용 가능한 템플릿 목록')
+  .option('-d, --detail', '상세 정보 표시')
+  .action((options) => {
+    console.log(chalk.bold('\n🎨 사용 가능한 템플릿:\n'));
+
+    const templates = getTemplateList();
+    templates.forEach(t => {
+      console.log(`  ${chalk.cyan(t.name.padEnd(16))} ${chalk.white(t.displayName)} - ${chalk.dim(t.description)}`);
+
+      if (options.detail) {
+        const template = TEMPLATES[t.name];
+        console.log(chalk.dim(`                  • 사진 ${template.photoDuration}초, ${template.transition} 전환`));
+        console.log(chalk.dim(`                  • Ken Burns: ${template.kenBurns ? '활성' : '비활성'}, 자막: ${template.subtitlePosition}`));
+        console.log('');
+      }
+    });
+
+    console.log('\n' + chalk.bold('사용법:'));
+    console.log(chalk.dim('  node src/index.js create --auto --template dynamic'));
+    console.log(chalk.dim('  node src/index.js create --auto -t elegant'));
   });
 
 // Config command
