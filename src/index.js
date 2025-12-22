@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
-import { fetchPhotos, downloadImage } from './api/pocketbase.js';
+import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
 import { generateVideo, TRANSITIONS } from './video/generator.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -23,18 +23,51 @@ program
   .description('클라우드 이미지로 쇼츠 영상 생성')
   .version('1.0.0');
 
+// Groups command
+program
+  .command('groups')
+  .description('그룹(제품) 목록 조회')
+  .option('-n, --limit <number>', '조회할 개수', '20')
+  .option('--since <date>', '특정 날짜 이후 (YYYY-MM-DD)')
+  .action(async (options) => {
+    const spinner = ora('그룹 목록 조회 중...').start();
+    try {
+      const groups = await fetchGroups({
+        limit: parseInt(options.limit),
+        since: options.since
+      });
+      spinner.succeed(`${groups.length}개 그룹 조회 완료`);
+
+      if (groups.length === 0) {
+        console.log(chalk.yellow('\n그룹이 없습니다.'));
+        return;
+      }
+
+      console.log('\n' + chalk.bold('📁 그룹 목록:'));
+      groups.forEach((group, i) => {
+        console.log(`  ${chalk.gray(`[${i + 1}]`)} ${chalk.white(group.title)}`);
+        console.log(`      ${chalk.dim(group.id)}`);
+      });
+    } catch (err) {
+      spinner.fail('조회 실패: ' + err.message);
+      console.error(chalk.dim(err.stack));
+    }
+  });
+
 // List command
 program
   .command('list')
   .description('PocketBase에서 사진 목록 조회')
   .option('-n, --limit <number>', '조회할 개수', '20')
   .option('--since <date>', '특정 날짜 이후 (YYYY-MM-DD)')
+  .option('-g, --group <id>', '특정 그룹의 사진만 조회')
   .action(async (options) => {
     const spinner = ora('사진 목록 조회 중...').start();
     try {
       const photos = await fetchPhotos({
         limit: parseInt(options.limit),
-        since: options.since
+        since: options.since,
+        groupId: options.group
       });
       spinner.succeed(`${photos.length}개 사진 조회 완료`);
 
@@ -43,10 +76,10 @@ program
         return;
       }
 
-      console.log('\n' + chalk.bold('📸 최근 사진 목록:'));
+      console.log('\n' + chalk.bold('📸 사진 목록:'));
       photos.forEach((photo, i) => {
-        const date = new Date(photo.created).toLocaleString('ko-KR');
-        console.log(`  ${chalk.gray(`[${i + 1}]`)} ${chalk.white(photo.title)} ${chalk.dim(`(${date})`)}`);
+        const groupInfo = photo.groupTitle ? chalk.cyan(`[${photo.groupTitle}] `) : '';
+        console.log(`  ${chalk.gray(`[${i + 1}]`)} ${groupInfo}${chalk.white(photo.title)}`);
         console.log(`      ${chalk.dim(photo.id)}`);
       });
     } catch (err) {
@@ -61,6 +94,7 @@ program
   .description('영상 생성')
   .option('-a, --auto', '자동 모드 (최신 사진 사용)')
   .option('-n, --count <number>', '사진 개수', '5')
+  .option('-g, --group <id>', '특정 그룹의 사진으로 영상 생성')
   .option('-o, --output <path>', '출력 경로')
   .option('--bgm <path>', 'BGM 파일 경로')
   .option('--logo <path>', '로고 이미지 경로')
@@ -70,6 +104,7 @@ program
   .action(async (options) => {
     try {
       let selectedPhotos;
+      let selectedGroupTitle = null;
 
       if (options.ids) {
         // ID로 직접 지정
@@ -78,26 +113,94 @@ program
         const allPhotos = await fetchPhotos({ limit: 100 });
         selectedPhotos = allPhotos.filter(p => ids.includes(p.id));
         spinner.succeed(`${selectedPhotos.length}개 사진 선택됨`);
-      } else {
-        // 사진 조회
-        const spinner = ora('사진 조회 중...').start();
-        const photos = await fetchPhotos({ limit: 50 });
-        spinner.succeed();
+      } else if (options.group) {
+        // 그룹 지정 모드
+        const spinner = ora(`그룹 사진 조회 중...`).start();
+        const photos = await fetchPhotosByGroup(options.group, { limit: 50 });
+        spinner.succeed(`${photos.length}개 사진 조회 완료`);
 
         if (photos.length === 0) {
-          console.log(chalk.yellow('사진이 없습니다. 먼저 Field Uploader로 업로드하세요.'));
+          console.log(chalk.yellow('해당 그룹에 사진이 없습니다.'));
           return;
         }
 
+        selectedGroupTitle = photos[0].groupTitle;
+
         if (options.auto) {
-          // 자동 모드: 최신 N개 (이미지가 있는 것만)
           const validPhotos = photos.filter(p => p.imageUrl);
           selectedPhotos = validPhotos.slice(0, parseInt(options.count));
-          console.log(chalk.green(`✓ 최신 ${selectedPhotos.length}개 사진 선택됨 (이미지 있음)`));
+          console.log(chalk.green(`✓ 그룹 [${selectedGroupTitle}] 최신 ${selectedPhotos.length}개 사진 선택됨`));
         } else {
-          // 대화형 모드
           const choices = photos.map((p, i) => ({
-            name: `${p.title} (${new Date(p.created).toLocaleDateString('ko-KR')})`,
+            name: p.title,
+            value: p,
+            checked: i < 5
+          }));
+
+          const photoAnswer = await inquirer.prompt([
+            {
+              type: 'checkbox',
+              name: 'photos',
+              message: `[${selectedGroupTitle}] 영상에 포함할 사진 선택:`,
+              choices,
+              pageSize: 15,
+              validate: (arr) => arr.length > 0 || '최소 1개 선택'
+            }
+          ]);
+          selectedPhotos = photoAnswer.photos;
+        }
+      } else {
+        // 대화형 모드: 그룹 선택 → 사진 선택
+        if (!options.auto) {
+          // 그룹 목록 조회
+          const groupSpinner = ora('그룹 목록 조회 중...').start();
+          const groups = await fetchGroups({ limit: 20 });
+          groupSpinner.succeed();
+
+          let selectedGroupId = null;
+
+          if (groups.length > 0) {
+            const groupChoices = [
+              { name: '📸 전체 사진 (그룹 무관)', value: null },
+              ...groups.map(g => ({
+                name: `📁 ${g.title}`,
+                value: g.id
+              }))
+            ];
+
+            const { group } = await inquirer.prompt([
+              {
+                type: 'list',
+                name: 'group',
+                message: '영상에 사용할 그룹 선택:',
+                choices: groupChoices,
+                pageSize: 10
+              }
+            ]);
+            selectedGroupId = group;
+
+            if (selectedGroupId) {
+              const groupInfo = groups.find(g => g.id === selectedGroupId);
+              selectedGroupTitle = groupInfo?.title;
+            }
+          }
+
+          // 선택된 그룹의 사진 조회
+          const photoSpinner = ora('사진 조회 중...').start();
+          const photos = selectedGroupId
+            ? await fetchPhotosByGroup(selectedGroupId, { limit: 50 })
+            : await fetchPhotos({ limit: 50 });
+          photoSpinner.succeed();
+
+          if (photos.length === 0) {
+            console.log(chalk.yellow('사진이 없습니다. 먼저 Field Uploader로 업로드하세요.'));
+            return;
+          }
+
+          const choices = photos.map((p, i) => ({
+            name: p.groupTitle
+              ? `[${p.groupTitle}] ${p.title}`
+              : p.title,
             value: p,
             checked: i < 5
           }));
@@ -138,6 +241,20 @@ program
               options.bgm = bgmAnswer.bgm;
             }
           }
+        } else {
+          // 자동 모드 (그룹 미지정)
+          const spinner = ora('사진 조회 중...').start();
+          const photos = await fetchPhotos({ limit: 50 });
+          spinner.succeed();
+
+          if (photos.length === 0) {
+            console.log(chalk.yellow('사진이 없습니다. 먼저 Field Uploader로 업로드하세요.'));
+            return;
+          }
+
+          const validPhotos = photos.filter(p => p.imageUrl);
+          selectedPhotos = validPhotos.slice(0, parseInt(options.count));
+          console.log(chalk.green(`✓ 최신 ${selectedPhotos.length}개 사진 선택됨 (이미지 있음)`));
         }
       }
 
@@ -158,8 +275,19 @@ program
 
       // 출력 경로 결정
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      let filename = `shorts_${timestamp}.mp4`;
+
+      // 그룹명이 있으면 파일명에 포함
+      const groupName = selectedGroupTitle || (selectedPhotos[0]?.groupTitle);
+      if (groupName) {
+        const safeName = groupName
+          .replace(/[\\/:*?"<>|]/g, '_')
+          .substring(0, 30);
+        filename = `shorts_${safeName}_${timestamp}.mp4`;
+      }
+
       const outputPath = options.output ||
-        join(__dirname, '..', config.output.directory, `shorts_${timestamp}.mp4`);
+        join(__dirname, '..', config.output.directory, filename);
 
       // 로고 경로 결정
       let logoPath = null;

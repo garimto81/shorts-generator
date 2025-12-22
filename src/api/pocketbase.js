@@ -40,32 +40,112 @@ async function authenticate() {
 }
 
 /**
+ * 그룹 목록 조회
+ * @param {Object} options - { limit, since }
+ * @returns {Promise<Array>} 그룹 배열
+ */
+export async function fetchGroups(options = {}) {
+  const { limit = 20 } = options;
+
+  const queryOptions = {};
+
+  let records;
+  try {
+    records = await pb.collection('photo_groups').getList(1, limit, queryOptions);
+  } catch (err) {
+    await authenticate();
+    records = await pb.collection('photo_groups').getList(1, limit, queryOptions);
+  }
+
+  return records.items.map(item => ({
+    id: item.id,
+    title: item.title
+  }));
+}
+
+/**
+ * 특정 그룹의 사진 목록 조회
+ * @param {string} groupId - 그룹 ID
+ * @param {Object} options - { limit }
+ * @returns {Promise<Array>} 사진 배열
+ */
+export async function fetchPhotosByGroup(groupId, options = {}) {
+  const { limit = 50 } = options;
+
+  const queryOptions = {
+    filter: `group = "${groupId}"`
+  };
+
+  let records;
+  try {
+    records = await pb.collection(COLLECTION).getList(1, limit, queryOptions);
+  } catch (err) {
+    await authenticate();
+    records = await pb.collection(COLLECTION).getList(1, limit, queryOptions);
+  }
+
+  // 그룹 정보 조회
+  let groupTitle = null;
+  try {
+    const group = await pb.collection('photo_groups').getOne(groupId);
+    groupTitle = group.title;
+  } catch (e) {
+    // 그룹 조회 실패 시 무시
+  }
+
+  return records.items.map(item => ({
+    id: item.id,
+    title: item.title,
+    groupId: item.group || null,
+    groupTitle: groupTitle,
+    imageUrl: item.image ? pb.files.getURL(item, item.image) : null,
+    thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null
+  }));
+}
+
+/**
  * 사진 목록 조회
+ * @param {Object} options - { limit, since, groupId }
+ * @returns {Promise<Array>} 사진 배열
  */
 export async function fetchPhotos(options = {}) {
-  const { limit = 50, since = null } = options;
+  const { limit = 50, groupId = null } = options;
 
-  // 공개 API로 먼저 시도, 실패 시 인증 후 재시도
   const queryOptions = {};
-  if (since) {
-    queryOptions.filter = `created >= "${since}"`;
+
+  if (groupId) {
+    queryOptions.filter = `group = "${groupId}"`;
   }
 
   let records;
   try {
     records = await pb.collection(COLLECTION).getList(1, limit, queryOptions);
   } catch (err) {
-    // 인증 필요 시 재시도
     await authenticate();
     records = await pb.collection(COLLECTION).getList(1, limit, queryOptions);
+  }
+
+  // 그룹 정보 조회 (그룹 ID가 있는 사진만)
+  const groupIds = [...new Set(records.items.map(item => item.group).filter(Boolean))];
+  const groupMap = {};
+
+  if (groupIds.length > 0) {
+    try {
+      const groupFilter = groupIds.map(id => `id = "${id}"`).join(' || ');
+      const groups = await pb.collection('photo_groups').getList(1, groupIds.length, { filter: groupFilter });
+      groups.items.forEach(g => { groupMap[g.id] = g.title; });
+    } catch (e) {
+      // 그룹 조회 실패 시 무시
+    }
   }
 
   return records.items.map(item => ({
     id: item.id,
     title: item.title,
+    groupId: item.group || null,
+    groupTitle: groupMap[item.group] || null,
     imageUrl: item.image ? pb.files.getURL(item, item.image) : null,
-    thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null,
-    created: item.created
+    thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null
   }));
 }
 
