@@ -1,8 +1,11 @@
 import { dirname, basename, join } from 'path';
+import { fileURLToPath } from 'url';
 import { mkdirSync, existsSync } from 'fs';
 import { spawn } from 'child_process';
 import { formatSubtitle } from './subtitle.js';
 import { SUBTITLE_POSITIONS, SUBTITLE_STYLES } from './templates.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Run FFmpeg command (silent mode for preview)
@@ -172,7 +175,13 @@ export async function generatePreview(photos, options = {}) {
     const subtitle = photo.title ? formatSubtitle(photo.title, 15) : '';
 
     if (subtitle) {
-      const fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
+      // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환)
+      let fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
+      if (fontPath.startsWith('./')) {
+        fontPath = join(__dirname, '../..', fontPath.slice(2));
+      }
+      // FFmpeg drawtext: 백슬래시→슬래시, 콜론 이스케이프
+      fontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
       const fontSize = Math.floor((subtitleConfig.fontSize || subtitleStyle.fontSize || 60) * (width / 1080));
       const textColor = hexToFFmpegColor(subtitleConfig.textColor || '#FFFFFF');
       const borderWidth = Math.max(1, Math.floor((subtitleStyle.borderWidth || 3) * (width / 1080)));

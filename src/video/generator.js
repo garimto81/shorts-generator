@@ -156,7 +156,13 @@ export async function generateVideo(photos, options = {}) {
     const subtitle = photo.title ? formatSubtitle(photo.title, 15) : '';
 
     if (subtitle) {
-      const fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
+      // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환)
+      let fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
+      if (fontPath.startsWith('./')) {
+        fontPath = join(__dirname, '../..', fontPath.slice(2));
+      }
+      // FFmpeg drawtext: 백슬래시→슬래시, 콜론 이스케이프
+      fontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
       const fontSize = subtitleConfig.fontSize || subtitleStyle.fontSize || 60;
       const textColor = hexToFFmpegColor(subtitleConfig.textColor || '#FFFFFF');
       const borderWidth = subtitleStyle.borderWidth || 3;
