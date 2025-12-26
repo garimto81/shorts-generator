@@ -143,7 +143,7 @@ Ken Burns 표현식: `zoom=1.0+(0.15)*on/(duration*fps)` (zoom in/out 교차)
 
 | 섹션 | 키 | 기본값 | 설명 |
 |------|-----|--------|------|
-| `pocketbase.url` | | `http://localhost:8090` | PocketBase 서버 URL |
+| `pocketbase.url` | | `https://union-public.pockethost.io` | PocketBase 서버 URL (PocketHost) |
 | `pocketbase.collection` | | `photos` | 컬렉션 이름 |
 | `pocketbase.auth` | | `null` | Superuser 인증 (email/password) |
 | `video.width/height` | | `1080x1920` | 영상 해상도 (세로 쇼츠) |
@@ -168,6 +168,47 @@ docker-compose logs pocketbase
 
 # FFmpeg 명령어 확인 (generator.js 콘솔 출력)
 # 영상 생성 시 전체 FFmpeg 명령어가 표시됨
+```
+
+---
+
+## Shared Infrastructure
+
+### PocketBase (공유 스토리지)
+
+형제 프로젝트 **field-uploader**와 **동일한 PocketBase 인스턴스** 사용:
+
+| 환경 | URL | 용도 |
+|------|-----|------|
+| Production | `https://union-public.pockethost.io` | field-uploader 업로드 + shorts-generator 조회 |
+| Local | `http://localhost:8090` | 로컬 개발/테스트 |
+
+```
+📱 field-uploader (모바일 PWA)
+        ↓ 사진 업로드
+☁️ PocketHost (union-public.pockethost.io)
+        ↓ 사진 조회
+🎬 shorts-generator (영상 생성 CLI)
+```
+
+---
+
+## Related Projects
+
+| 프로젝트 | 설명 | 경로 |
+|----------|------|------|
+| **field-uploader** | 모바일 사진 촬영/업로드 PWA | `D:\AI\claude01\field-uploader` |
+
+### field-uploader 연동
+
+field-uploader에서 업로드된 사진을 자동으로 조회하여 영상 생성:
+
+```bash
+# 모바일에서 촬영한 사진 그룹 확인
+node src/index.js groups
+
+# 특정 그룹의 사진으로 영상 생성
+node src/index.js create -g <group_id> --auto
 ```
 
 ---
