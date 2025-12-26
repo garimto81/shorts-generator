@@ -12,7 +12,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  */
 function runFFmpeg(args) {
   return new Promise((resolve, reject) => {
-    console.log('FFmpeg command:', 'ffmpeg', args.join(' ').substring(0, 200) + '...');
+    console.log('FFmpeg command:', 'ffmpeg', args.join(' '));
+    console.log('Filter complex:', args[args.indexOf('-filter_complex') + 1]);
     const ffmpeg = spawn('ffmpeg', args, { stdio: 'inherit' });
     ffmpeg.on('close', (code) => {
       if (code === 0) resolve();
@@ -84,12 +85,17 @@ export async function generateVideo(photos, options = {}) {
   // Ensure output directory exists
   mkdirSync(dirname(outputPath), { recursive: true });
 
-  const duration = videoConfig.photoDuration || 3;
+  const defaultDuration = videoConfig.photoDuration || 3;
   const width = videoConfig.width || 1080;
   const height = videoConfig.height || 1920;
   const fps = videoConfig.fps || 30;
   const transitionDuration = videoConfig.transitionDuration || 0.5;
   const transition = videoConfig.transition || 'fade';
+
+  // 사진별 개별 duration 가져오기 (동적 duration 지원)
+  const getPhotoDuration = (photo) => {
+    return photo.dynamicDuration || defaultDuration;
+  };
 
   // Template settings
   const useKenBurns = templateConfig.kenBurns !== false;
@@ -124,19 +130,20 @@ export async function generateVideo(photos, options = {}) {
   // 1. Scale and Ken Burns effect for each photo
   for (let i = 0; i < photoCount; i++) {
     const photo = photos[i];
+    const photoDuration = getPhotoDuration(photo);
 
     if (useKenBurns && zoomIntensity > 0) {
       // Ken Burns: alternating zoom in/out
       const zoomDirection = i % 2 === 0 ? 'in' : 'out';
       const zoomStart = zoomDirection === 'in' ? 1.0 : (1.0 + zoomIntensity);
       const zoomEnd = zoomDirection === 'in' ? (1.0 + zoomIntensity) : 1.0;
-      const zoomExpr = `${zoomStart}+(${zoomEnd}-${zoomStart})*on/(${duration}*${fps})`;
+      const zoomExpr = `${zoomStart}+(${zoomEnd}-${zoomStart})*on/(${photoDuration}*${fps})`;
 
       // Scale with Ken Burns (zoompan)
       filters.push(
         `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,` +
         `crop=${width * 2}:${height * 2},` +
-        `zoompan=z='${zoomExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${duration * fps}:s=${width}x${height}:fps=${fps},` +
+        `zoompan=z='${zoomExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${photoDuration * fps}:s=${width}x${height}:fps=${fps},` +
         `setsar=1[v${i}]`
       );
     } else {
@@ -144,7 +151,7 @@ export async function generateVideo(photos, options = {}) {
       filters.push(
         `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
         `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
-        `loop=loop=${duration * fps}:size=1:start=0,` +
+        `loop=loop=${photoDuration * fps}:size=1:start=0,` +
         `setpts=PTS-STARTPTS,fps=${fps},setsar=1[v${i}]`
       );
     }
@@ -153,7 +160,9 @@ export async function generateVideo(photos, options = {}) {
   // 2. Add subtitles to each video segment
   for (let i = 0; i < photoCount; i++) {
     const photo = photos[i];
-    const subtitle = photo.title ? formatSubtitle(photo.title, 15) : '';
+    // 자막 우선순위: finalSubtitle (AI) > title > groupTitle
+    const subtitleText = photo.finalSubtitle || photo.title || photo.groupTitle || '';
+    const subtitle = subtitleText ? formatSubtitle(subtitleText, 15) : '';
 
     if (subtitle) {
       // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환)
@@ -189,14 +198,21 @@ export async function generateVideo(photos, options = {}) {
     const xfadeTransition = getTransitionFilter(transition, transitionDuration);
     let prevOutput = 'vt0';
 
+    // 누적 duration 기반 offset 계산 (동적 duration 지원)
+    let cumulativeDuration = getPhotoDuration(photos[0]);
+
     for (let i = 1; i < photoCount; i++) {
-      const offset = (i * duration) - (i * transitionDuration);
+      // offset = 이전 클립들의 총 길이 - 누적 전환 시간
+      const offset = cumulativeDuration - transitionDuration;
       const outputLabel = i === photoCount - 1 ? 'vmerged' : `vx${i}`;
 
       filters.push(
         `[${prevOutput}][vt${i}]xfade=transition=${xfadeTransition}:duration=${transitionDuration}:offset=${offset}[${outputLabel}]`
       );
       prevOutput = outputLabel;
+
+      // 다음 클립 duration 누적
+      cumulativeDuration += getPhotoDuration(photos[i]) - transitionDuration;
     }
 
     // 4. Add logo overlay if enabled

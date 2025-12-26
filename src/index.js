@@ -8,6 +8,8 @@ import { generateVideo, TRANSITIONS } from './video/generator.js';
 import { generateThumbnail } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
+import { generateSubtitles, checkAvailability, PROMPT_TYPES } from './ai/subtitle-generator.js';
+import { READING_SPEED_PRESETS } from './video/duration-calculator.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -109,6 +111,9 @@ program
   .option('-t, --template <name>', '영상 템플릿 (classic, dynamic, elegant, minimal, quick, cinematic 등)')
   .option('--preview', '저해상도 미리보기 영상만 생성')
   .option('--preview-quality <quality>', '미리보기 품질 (fast/balanced/quality)', 'fast')
+  .option('--ai-subtitle', 'AI로 마케팅 자막 자동 생성 (GOOGLE_API_KEY 필요)')
+  .option('--prompt-template <type>', 'AI 프롬프트 템플릿 (default/product/food/wheelRestoration)', 'default')
+  .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -281,6 +286,55 @@ program
       }
       downloadSpinner.succeed('이미지 다운로드 완료');
 
+      // AI 자막 생성 (옵션 활성화 시)
+      if (options.aiSubtitle) {
+        const aiCheck = checkAvailability();
+        if (!aiCheck.available) {
+          console.log(chalk.yellow(`\n⚠️  AI 자막 사용 불가: ${aiCheck.reason}`));
+          console.log(chalk.dim('환경변수 설정: set GOOGLE_API_KEY=your-api-key'));
+        } else {
+          const aiSpinner = ora('🤖 AI 자막 생성 중...').start();
+          try {
+            selectedPhotos = await generateSubtitles(selectedPhotos, {
+              promptTemplate: options.promptTemplate || 'default',
+              readingSpeed: options.readingSpeed || 'normal',
+              onProgress: (msg) => {
+                aiSpinner.text = `🤖 AI 자막 생성 중... ${msg}`;
+              }
+            });
+            aiSpinner.succeed('AI 자막 생성 완료');
+
+            // 생성된 자막 미리보기
+            console.log(chalk.dim('\n📝 생성된 자막:'));
+            selectedPhotos.forEach((p, i) => {
+              const duration = p.dynamicDuration ? `${p.dynamicDuration}초` : '';
+              console.log(chalk.dim(`  [${i + 1}] "${p.finalSubtitle}" ${duration}`));
+            });
+            console.log('');
+          } catch (aiErr) {
+            aiSpinner.fail('AI 자막 생성 실패: ' + aiErr.message);
+            console.log(chalk.dim('기본 자막(그룹명)으로 진행합니다.'));
+          }
+        }
+      }
+
+      // 무작위 duration 적용 (randomDuration 설정이 활성화된 경우)
+      const randomDurationConfig = config.randomDuration || {};
+      if (randomDurationConfig.enabled) {
+        const min = randomDurationConfig.min || 5;
+        const max = randomDurationConfig.max || 10;
+        selectedPhotos.forEach(photo => {
+          // AI 동적 duration이 없는 경우에만 무작위 적용
+          if (!photo.dynamicDuration) {
+            photo.dynamicDuration = Math.floor(Math.random() * (max - min + 1)) + min;
+          }
+        });
+        console.log(chalk.cyan(`⏱️  무작위 재생시간 적용: ${min}~${max}초`));
+        selectedPhotos.forEach((p, i) => {
+          console.log(chalk.dim(`  [${i + 1}] ${p.title}: ${p.dynamicDuration}초`));
+        });
+      }
+
       // 출력 경로 결정
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       let filename = `shorts_${timestamp}.mp4`;
@@ -358,9 +412,18 @@ program
           genSpinner.succeed(chalk.green(`✅ 영상 생성 완료!`));
           console.log(`\n📁 출력 파일: ${chalk.cyan(outputPath)}`);
           console.log(`📐 해상도: ${videoConfig.video.width}x${videoConfig.video.height}`);
-          console.log(`⏱️  총 길이: ~${selectedPhotos.length * videoConfig.video.photoDuration}초`);
+
+          // 동적 duration이 있으면 실제 합계, 없으면 고정값 계산
+          const totalDuration = selectedPhotos.reduce((sum, p) => {
+            return sum + (p.dynamicDuration || videoConfig.video.photoDuration);
+          }, 0);
+          console.log(`⏱️  총 길이: ~${Math.round(totalDuration)}초`);
+
           if (options.template) {
             console.log(`🎨 템플릿: ${TEMPLATES[options.template].name}`);
+          }
+          if (options.aiSubtitle) {
+            console.log(`🤖 AI 자막: 활성화`);
           }
 
           // 썸네일 생성
