@@ -50,12 +50,13 @@ async function setup() {
       const created = await pb.collections.create({
         name: 'photo_groups',
         type: 'base',
-        schema: [
+        fields: [
           {
             name: 'title',
             type: 'text',
             required: true,
-            options: { min: 1, max: 200 }
+            min: 1,
+            max: 200
           }
         ],
         listRule: '',
@@ -84,44 +85,37 @@ async function setup() {
       await pb.collections.create({
         name: 'photos',
         type: 'base',
-        schema: [
+        fields: [
           {
             name: 'title',
             type: 'text',
             required: true,
-            options: { min: 1, max: 200 }
+            min: 1,
+            max: 200
           },
           {
             name: 'image',
             type: 'file',
             required: true,
-            options: {
-              maxSelect: 1,
-              maxSize: 10485760,
-              mimeTypes: ['image/jpeg', 'image/png', 'image/webp']
-            }
+            maxSelect: 1,
+            maxSize: 10485760,
+            mimeTypes: ['image/jpeg', 'image/png', 'image/webp']
           },
           {
             name: 'thumbnail',
             type: 'file',
             required: false,
-            options: {
-              maxSelect: 1,
-              maxSize: 1048576,
-              mimeTypes: ['image/jpeg', 'image/png', 'image/webp']
-            }
+            maxSelect: 1,
+            maxSize: 1048576,
+            mimeTypes: ['image/jpeg', 'image/png', 'image/webp']
           },
           {
             name: 'group',
             type: 'relation',
             required: false,
-            options: {
-              collectionId: photoGroupsId,
-              cascadeDelete: false,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['title']
-            }
+            collectionId: photoGroupsId,
+            cascadeDelete: false,
+            maxSelect: 1
           }
         ],
         listRule: '',
