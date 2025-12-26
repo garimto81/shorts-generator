@@ -61,6 +61,11 @@ node scripts/setup-pocketbase.js
 | `create` | `--transition <name>` | 전환 효과 (fade, slideright 등) |
 | `create` | `--bgm <path>` | BGM 파일 경로 |
 | `create` | `--no-logo` | 로고 비활성화 |
+| `create` | `--thumbnail` | 영상 생성 후 썸네일 자동 생성 |
+| `create` | `--preview` | 저해상도 미리보기만 생성 (빠른 확인용) |
+| `create` | `-t, --template <name>` | 영상 템플릿 (classic, dynamic, elegant 등) |
+| `thumbnail` | `-p, --position <pos>` | 썸네일 추출 위치 (start/middle/end 또는 초) |
+| `templates` | `-d, --detail` | 템플릿 상세 정보 표시 |
 
 ---
 
@@ -82,6 +87,9 @@ photos 컬렉션   배열 반환     temp/{id}.jpg    FFmpeg filter_complex
 | `src/api/pocketbase.js` | PocketBase API (`fetchGroups`, `fetchPhotosByGroup`, `fetchPhotos`, `downloadImage`) |
 | `src/video/generator.js` | FFmpeg filter_complex 파이프라인 (Ken Burns + xfade + 자막 + 로고) |
 | `src/video/subtitle.js` | `formatSubtitle(text, 15)` - 15자 단위 줄바꿈 |
+| `src/video/templates.js` | 8개 템플릿 정의 (classic, dynamic, elegant, minimal, quick, cinematic 등) |
+| `src/video/preview.js` | 저해상도 미리보기 생성 (fast/balanced/quality 프리셋) |
+| `src/video/thumbnail.js` | 영상에서 썸네일 이미지 추출 |
 
 ### FFmpeg 파이프라인 (generator.js)
 
@@ -96,6 +104,19 @@ photos 컬렉션   배열 반환     temp/{id}.jpg    FFmpeg filter_complex
 ```
 
 Ken Burns 표현식: `zoom=1.0+(0.15)*on/(duration*fps)` (zoom in/out 교차)
+
+### 템플릿 시스템 (templates.js)
+
+| 템플릿 | 특징 |
+|--------|------|
+| `classic` | 기본값, 균형 잡힌 설정 (3초, fade) |
+| `dynamic` | 빠른 전환, 강한 줌 (2초, slideright) |
+| `elegant` | 느린 전환, 부드러운 줌 (4초, crossfade) |
+| `minimal` | Ken Burns 비활성화, 깔끔 (3초, fade) |
+| `quick` | TikTok 최적화 (1.5초, slideleft) |
+| `cinematic` | 영화같은 분위기 (5초, fade) |
+
+미리보기 품질: `fast` (360x640), `balanced` (540x960), `quality` (720x1280)
 
 ### PocketBase 스키마
 
@@ -131,6 +152,7 @@ Ken Burns 표현식: `zoom=1.0+(0.15)*on/(duration*fps)` (zoom in/out 교차)
 | `video.transitionDuration` | | `0.5` | 전환 효과 시간 (초) |
 | `branding.enabled` | | `true` | 로고 표시 여부 |
 | `subtitle.font` | | `./assets/fonts/NotoSansKR-Bold.otf` | 폰트 경로 |
+| `output.directory` | | `output` | 영상 출력 디렉토리 |
 
 ---
 
