@@ -122,8 +122,12 @@ Ken Burns 표현식: `zoom=1.0+(0.15)*on/(duration*fps)` (zoom in/out 교차)
 | `dynamic` | 빠른 전환, 강한 줌 (2초, slideright) |
 | `elegant` | 느린 전환, 부드러운 줌 (4초, crossfade) |
 | `minimal` | Ken Burns 비활성화, 깔끔 (3초, fade) |
+| `wheelRestoration` | 휠 복원 작업 최적화 (3초, directionalwipe) |
+| `beforeAfter` | 전/후 비교용 (4초, wipeleft, 중앙 자막) |
 | `quick` | TikTok 최적화 (1.5초, slideleft) |
 | `cinematic` | 영화같은 분위기 (5초, fade) |
+
+자막 스타일: `default`, `bold`, `minimal`, `elegant`, `cinematic`, `contrast`, `boxed`, `shadow`, `boxedShadow`
 
 미리보기 품질: `fast` (360x640), `balanced` (540x960), `quality` (720x1280)
 
@@ -168,8 +172,10 @@ Ken Burns 표현식: `zoom=1.0+(0.15)*on/(duration*fps)` (zoom in/out 교차)
 | `ai.promptTemplate` | | `default` | 기본 프롬프트 템플릿 |
 | `dynamicDuration.enabled` | | `false` | 자막 길이 기반 동적 재생 시간 |
 | `dynamicDuration.readingSpeed` | | `250` | 읽기 속도 (CPM) |
-| `randomDuration.enabled` | | `false` | 무작위 재생 시간 |
+| `randomDuration.enabled` | | `true` | 무작위 재생 시간 (기본 활성화) |
 | `randomDuration.min/max` | | `5/10` | 무작위 범위 (초) |
+| `audio.randomBgm` | | `true` | assets/bgm 폴더에서 랜덤 BGM 선택 |
+| `audio.defaultBgm` | | `upbeat_bgm.mp3` | 기본 BGM 파일 |
 
 ### AI 자막 시스템
 
@@ -252,6 +258,18 @@ node src/index.js groups
 # 특정 그룹의 사진으로 영상 생성
 node src/index.js create -g <group_id> --auto
 ```
+
+---
+
+## Known Issues
+
+콘텐츠 퀄리티 관련 이슈 및 개선 로드맵: **[docs/QUALITY_ISSUES.md](docs/QUALITY_ISSUES.md)**
+
+| 이슈 | 제목 | 우선순위 |
+|------|------|----------|
+| #9 | 콘텐츠 퀄리티 종합 개선 | P0-P3 |
+| #7 | 자막 퀄리티 개선 | P0 (진행 중) |
+| #6 | 이미지 정렬 기준 불명확 | P1 |
 
 ---
 
