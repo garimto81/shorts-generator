@@ -88,18 +88,20 @@ async function imageToBase64(imagePath) {
  * @param {string} imagePath - 이미지 파일 경로
  * @param {Object} options - 옵션
  * @param {string} options.promptTemplate - 프롬프트 템플릿 타입
+ * @param {string} options.quality - 품질 레벨 (creative|balanced|conservative)
  * @param {string} options.model - Gemini 모델 이름
  * @returns {Promise<string>} 생성된 자막
  */
 export async function analyzeImage(imagePath, options = {}) {
   const {
     promptTemplate = 'default',
+    quality = 'balanced',
     model: modelName
   } = options;
 
   const model = getModel(modelName);
   const { data, mimeType } = await imageToBase64(imagePath);
-  const prompt = getPrompt(promptTemplate);
+  const prompt = getPrompt(promptTemplate, quality);
 
   const result = await model.generateContent([
     { inlineData: { mimeType, data } },
@@ -118,6 +120,7 @@ export async function analyzeImage(imagePath, options = {}) {
  * @param {Array<{id: string, localPath: string}>} photos - 사진 배열
  * @param {Object} options - 옵션
  * @param {string} options.promptTemplate - 프롬프트 템플릿 타입
+ * @param {string} options.quality - 품질 레벨 (creative|balanced|conservative)
  * @param {string} options.model - Gemini 모델 이름
  * @param {number} options.delayMs - 요청 간 지연 시간 (ms)
  * @param {Function} options.onProgress - 진행 상황 콜백
@@ -126,6 +129,7 @@ export async function analyzeImage(imagePath, options = {}) {
 export async function analyzeImageBatch(photos, options = {}) {
   const {
     promptTemplate = 'default',
+    quality = 'balanced',
     model,
     delayMs = 1000, // rate limit 방지
     onProgress
@@ -144,6 +148,7 @@ export async function analyzeImageBatch(photos, options = {}) {
 
       const subtitle = await analyzeImage(photo.localPath, {
         promptTemplate,
+        quality,
         model
       });
 

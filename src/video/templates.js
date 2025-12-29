@@ -181,26 +181,86 @@ export const SUBTITLE_POSITIONS = {
 export const SUBTITLE_STYLES = {
   default: {
     fontSize: 60,
-    borderWidth: 3
+    borderWidth: 3,
+    backgroundColor: null,
+    shadow: false
   },
   bold: {
     fontSize: 70,
-    borderWidth: 4
+    borderWidth: 4,
+    backgroundColor: null,
+    shadow: false
   },
   minimal: {
     fontSize: 50,
-    borderWidth: 2
+    borderWidth: 2,
+    backgroundColor: null,
+    shadow: false
   },
   elegant: {
     fontSize: 55,
-    borderWidth: 2
+    borderWidth: 2,
+    backgroundColor: null,
+    shadow: false
   },
   cinematic: {
     fontSize: 65,
-    borderWidth: 3
+    borderWidth: 3,
+    backgroundColor: null,
+    shadow: true,
+    shadowX: 3,
+    shadowY: 3
   },
   contrast: {
     fontSize: 65,
-    borderWidth: 4
+    borderWidth: 4,
+    backgroundColor: null,
+    shadow: false
+  },
+  // 새 스타일: 반투명 배경 박스
+  boxed: {
+    fontSize: 60,
+    borderWidth: 2,
+    backgroundColor: '0x00000099',  // 검정 60% 투명도
+    backgroundPadding: 15,
+    shadow: false
+  },
+  // 새 스타일: 그림자 효과
+  shadow: {
+    fontSize: 60,
+    borderWidth: 2,
+    backgroundColor: null,
+    shadow: true,
+    shadowX: 4,
+    shadowY: 4,
+    shadowColor: '0x00000080'
+  },
+  // 새 스타일: 배경 + 그림자 조합
+  boxedShadow: {
+    fontSize: 60,
+    borderWidth: 2,
+    backgroundColor: '0x00000080',  // 검정 50% 투명도
+    backgroundPadding: 12,
+    shadow: true,
+    shadowX: 2,
+    shadowY: 2,
+    shadowColor: '0x00000060'
   }
 };
+
+/**
+ * Get subtitle style by name
+ * @param {string} name - Style name
+ * @returns {Object} Style configuration
+ */
+export function getSubtitleStyle(name) {
+  return SUBTITLE_STYLES[name] || SUBTITLE_STYLES.default;
+}
+
+/**
+ * Get all subtitle style names
+ * @returns {string[]} Array of style names
+ */
+export function getSubtitleStyleNames() {
+  return Object.keys(SUBTITLE_STYLES);
+}

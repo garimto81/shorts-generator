@@ -180,12 +180,31 @@ export async function generateVideo(photos, options = {}) {
       // Position based on template setting
       const yPos = SUBTITLE_POSITIONS[subtitlePosition] || SUBTITLE_POSITIONS.bottom;
 
-      filters.push(
-        `[v${i}]drawtext=fontfile='${fontPath}':text='${escapedText}':` +
+      // 스타일 옵션: 배경 박스, 그림자
+      const hasBackground = subtitleStyle.backgroundColor;
+      const hasShadow = subtitleStyle.shadow;
+
+      let drawtextParams = `fontfile='${fontPath}':text='${escapedText}':` +
         `fontsize=${fontSize}:fontcolor=${textColor}:` +
         `borderw=${borderWidth}:bordercolor=black:` +
-        `x=(w-text_w)/2:y=${yPos}[vt${i}]`
-      );
+        `x=(w-text_w)/2:y=${yPos}`;
+
+      // 배경 박스 추가 (FFmpeg box 파라미터)
+      if (hasBackground) {
+        const bgColor = subtitleStyle.backgroundColor;
+        const bgPadding = subtitleStyle.backgroundPadding || 10;
+        drawtextParams += `:box=1:boxcolor=${bgColor}:boxborderw=${bgPadding}`;
+      }
+
+      // 그림자 효과 추가
+      if (hasShadow) {
+        const shadowX = subtitleStyle.shadowX || 3;
+        const shadowY = subtitleStyle.shadowY || 3;
+        const shadowColor = subtitleStyle.shadowColor || '0x00000080';
+        drawtextParams += `:shadowx=${shadowX}:shadowy=${shadowY}:shadowcolor=${shadowColor}`;
+      }
+
+      filters.push(`[v${i}]drawtext=${drawtextParams}[vt${i}]`);
     } else {
       filters.push(`[v${i}]null[vt${i}]`);
     }

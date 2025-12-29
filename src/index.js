@@ -9,7 +9,7 @@ import { generateVideo, TRANSITIONS } from './video/generator.js';
 import { generateThumbnail } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
-import { generateSubtitles, checkAvailability, PROMPT_TYPES } from './ai/subtitle-generator.js';
+import { generateSubtitles, checkAvailability, PROMPT_TYPES, QUALITY_LEVELS } from './ai/subtitle-generator.js';
 import { READING_SPEED_PRESETS } from './video/duration-calculator.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -114,6 +114,8 @@ program
   .option('--preview-quality <quality>', '미리보기 품질 (fast/balanced/quality)', 'fast')
   .option('--ai-subtitle', 'AI로 마케팅 자막 자동 생성 (GOOGLE_API_KEY 필요)')
   .option('--prompt-template <type>', 'AI 프롬프트 템플릿 (default/product/food/wheelRestoration)', 'default')
+  .option('--ai-quality <level>', 'AI 자막 품질 레벨 (creative/balanced/conservative)', 'balanced')
+  .option('--ai-review', 'AI 자막 생성 후 수정 기회 제공')
   .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
   .action(async (options) => {
     try {
@@ -316,16 +318,31 @@ program
           console.log(chalk.yellow(`\n⚠️  AI 자막 사용 불가: ${aiCheck.reason}`));
           console.log(chalk.dim('환경변수 설정: set GOOGLE_API_KEY=your-api-key'));
         } else {
-          const aiSpinner = ora('🤖 AI 자막 생성 중...').start();
+          // 품질 레벨 검증
+          const quality = options.aiQuality || 'balanced';
+          if (!QUALITY_LEVELS.includes(quality)) {
+            console.log(chalk.yellow(`⚠️  알 수 없는 품질 레벨: ${quality}`));
+            console.log(chalk.dim(`사용 가능: ${QUALITY_LEVELS.join(', ')}`));
+            return;
+          }
+
+          const qualityLabel = {
+            creative: '🎨 창의적',
+            balanced: '⚖️ 균형',
+            conservative: '🛡️ 보수적'
+          }[quality];
+
+          const aiSpinner = ora(`🤖 AI 자막 생성 중... (${qualityLabel})`).start();
           try {
             selectedPhotos = await generateSubtitles(selectedPhotos, {
               promptTemplate: options.promptTemplate || 'default',
+              quality,
               readingSpeed: options.readingSpeed || 'normal',
               onProgress: (msg) => {
                 aiSpinner.text = `🤖 AI 자막 생성 중... ${msg}`;
               }
             });
-            aiSpinner.succeed('AI 자막 생성 완료');
+            aiSpinner.succeed(`AI 자막 생성 완료 (${qualityLabel})`);
 
             // 생성된 자막 미리보기
             console.log(chalk.dim('\n📝 생성된 자막:'));
@@ -334,6 +351,34 @@ program
               console.log(chalk.dim(`  [${i + 1}] "${p.finalSubtitle}" ${duration}`));
             });
             console.log('');
+
+            // AI 자막 리뷰 (--ai-review 옵션)
+            if (options.aiReview) {
+              const reviewAnswer = await inquirer.prompt([
+                {
+                  type: 'confirm',
+                  name: 'editSubtitles',
+                  message: '자막을 수정하시겠습니까?',
+                  default: false
+                }
+              ]);
+
+              if (reviewAnswer.editSubtitles) {
+                for (let i = 0; i < selectedPhotos.length; i++) {
+                  const photo = selectedPhotos[i];
+                  const editAnswer = await inquirer.prompt([
+                    {
+                      type: 'input',
+                      name: 'subtitle',
+                      message: `[${i + 1}/${selectedPhotos.length}] 자막:`,
+                      default: photo.finalSubtitle
+                    }
+                  ]);
+                  photo.finalSubtitle = editAnswer.subtitle;
+                }
+                console.log(chalk.green('✓ 자막 수정 완료'));
+              }
+            }
           } catch (aiErr) {
             aiSpinner.fail('AI 자막 생성 실패: ' + aiErr.message);
             console.log(chalk.dim('기본 자막(그룹명)으로 진행합니다.'));
