@@ -277,12 +277,25 @@ program
         return;
       }
 
-      // 자동 모드에서 기본 BGM 적용
-      if (!options.bgm && config.audio?.defaultBgm) {
-        const defaultBgmPath = join(__dirname, '../assets/bgm', config.audio.defaultBgm);
-        if (existsSync(defaultBgmPath)) {
-          options.bgm = defaultBgmPath;
-          console.log(chalk.dim(`🎵 기본 BGM: ${config.audio.defaultBgm}`));
+      // 자동 모드에서 BGM 적용 (랜덤 또는 기본)
+      if (!options.bgm) {
+        const bgmDir = join(__dirname, '../assets/bgm');
+        const bgmFiles = existsSync(bgmDir)
+          ? readdirSync(bgmDir).filter(f => f.endsWith('.mp3') || f.endsWith('.wav'))
+          : [];
+
+        if (config.audio?.randomBgm && bgmFiles.length > 0) {
+          // 랜덤 BGM 선택
+          const randomBgm = bgmFiles[Math.floor(Math.random() * bgmFiles.length)];
+          options.bgm = join(bgmDir, randomBgm);
+          console.log(chalk.dim(`🎵 랜덤 BGM: ${randomBgm}`));
+        } else if (config.audio?.defaultBgm) {
+          // 기본 BGM 적용
+          const defaultBgmPath = join(bgmDir, config.audio.defaultBgm);
+          if (existsSync(defaultBgmPath)) {
+            options.bgm = defaultBgmPath;
+            console.log(chalk.dim(`🎵 기본 BGM: ${config.audio.defaultBgm}`));
+          }
         }
       }
 
