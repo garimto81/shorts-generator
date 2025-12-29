@@ -6,13 +6,14 @@
 
 import { analyzeImageBatch, isApiKeySet } from './vision.js';
 import { calculateDuration, parseReadingSpeed } from '../video/duration-calculator.js';
-import { PROMPT_TYPES } from './prompt-templates.js';
+import { PROMPT_TYPES, QUALITY_LEVELS } from './prompt-templates.js';
 
 /**
  * 사진 배열에 AI 자막과 동적 재생 시간을 추가
  * @param {Array} photos - 사진 배열 (localPath 필수)
  * @param {Object} options - 옵션
  * @param {string} options.promptTemplate - 프롬프트 템플릿
+ * @param {string} options.quality - 품질 레벨 (creative|balanced|conservative)
  * @param {string|number} options.readingSpeed - 읽기 속도
  * @param {number} options.minDuration - 최소 재생 시간
  * @param {number} options.maxDuration - 최대 재생 시간
@@ -22,6 +23,7 @@ import { PROMPT_TYPES } from './prompt-templates.js';
 export async function generateSubtitles(photos, options = {}) {
   const {
     promptTemplate = 'default',
+    quality = 'balanced',
     readingSpeed = 250,
     minDuration = 2.0,
     maxDuration = 6.0,
@@ -56,6 +58,7 @@ export async function generateSubtitles(photos, options = {}) {
   // AI 분석 실행
   const subtitleMap = await analyzeImageBatch(photos, {
     promptTemplate,
+    quality,
     onProgress: progressWrapper
   });
 
@@ -103,3 +106,8 @@ export function checkAvailability() {
  * 사용 가능한 프롬프트 템플릿 목록
  */
 export { PROMPT_TYPES };
+
+/**
+ * 사용 가능한 품질 레벨 목록
+ */
+export { QUALITY_LEVELS };

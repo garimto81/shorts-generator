@@ -101,10 +101,51 @@ export const PROMPTS = {
 export const PROMPT_TYPES = Object.keys(PROMPTS);
 
 /**
+ * AI 품질 레벨별 프롬프트 수정자
+ * 기본 프롬프트에 추가되어 스타일을 조절합니다.
+ */
+export const QUALITY_MODIFIERS = {
+  /**
+   * 창의적/대담한 문구 (독창적, 임팩트 있음)
+   */
+  creative: `
+추가 지침:
+- 평범한 마케팅 문구는 피하세요
+- 독창적이고 기억에 남는 표현 사용
+- 은유, 비유 등 문학적 표현 활용
+- 감정을 자극하는 강렬한 단어 선택
+- 뻔하지 않은 시각으로 접근`,
+
+  /**
+   * 균형 잡힌 문구 (기본값)
+   */
+  balanced: '',  // 기본 프롬프트 그대로 사용
+
+  /**
+   * 보수적/안전한 문구 (검증된 패턴)
+   */
+  conservative: `
+추가 지침:
+- 검증된 마케팅 문구 패턴 사용
+- 명확하고 직관적인 표현
+- 과장 표현 최소화
+- 제품/서비스의 실질적 가치에 집중
+- 신뢰감을 주는 차분한 톤`
+};
+
+/**
+ * 품질 레벨 목록
+ */
+export const QUALITY_LEVELS = Object.keys(QUALITY_MODIFIERS);
+
+/**
  * 프롬프트 템플릿 가져오기
  * @param {string} type - 템플릿 타입
+ * @param {string} quality - 품질 레벨 (creative|balanced|conservative)
  * @returns {string} 프롬프트 텍스트
  */
-export function getPrompt(type = 'default') {
-  return PROMPTS[type] || PROMPTS.default;
+export function getPrompt(type = 'default', quality = 'balanced') {
+  const basePrompt = PROMPTS[type] || PROMPTS.default;
+  const modifier = QUALITY_MODIFIERS[quality] || '';
+  return basePrompt + modifier;
 }
