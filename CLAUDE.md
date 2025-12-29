@@ -69,6 +69,7 @@ node scripts/setup-pocketbase.js
 | `create` | `--ai-subtitle` | AI로 마케팅 자막 자동 생성 (GOOGLE_API_KEY 필요) |
 | `create` | `--prompt-template <type>` | AI 프롬프트 템플릿 (default/product/food/wheelRestoration) |
 | `create` | `--reading-speed <speed>` | 읽기 속도 (slow/normal/fast 또는 CPM 숫자) |
+| `create` | `--beat-sync <bpm>` | BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자) |
 | `thumbnail` | `-p, --position <pos>` | 썸네일 추출 위치 (start/middle/end 또는 초) |
 | `templates` | `-d, --detail` | 템플릿 상세 정보 표시 |
 
@@ -99,6 +100,7 @@ photos 컬렉션   배열 반환     temp/{id}.jpg    FFmpeg filter_complex
 | `src/ai/subtitle-generator.js` | AI 자막 생성 통합 (이미지 분석 → 자막 → 재생 시간) |
 | `src/ai/vision.js` | Google Gemini Vision API 연동 (`analyzeImageBatch`) |
 | `src/ai/prompt-templates.js` | AI 프롬프트 템플릿 (default, product, food, wheelRestoration) |
+| `src/audio/beat-sync.js` | BPM 기반 비트 동기화 (전환 타이밍 계산) |
 
 ### FFmpeg 파이프라인 (generator.js)
 
