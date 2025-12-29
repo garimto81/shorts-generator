@@ -11,6 +11,7 @@ import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './v
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
 import { generateSubtitles, checkAvailability, PROMPT_TYPES, QUALITY_LEVELS } from './ai/subtitle-generator.js';
 import { READING_SPEED_PRESETS } from './video/duration-calculator.js';
+import { applyBeatSync, getBeatSyncSummary, BPM_PRESETS, BPM_PRESET_NAMES } from './audio/beat-sync.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -130,6 +131,7 @@ program
   .option('--ai-quality <level>', 'AI 자막 품질 레벨 (creative/balanced/conservative)', 'balanced')
   .option('--ai-review', 'AI 자막 생성 후 수정 기회 제공')
   .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
+  .option('--beat-sync <bpm>', 'BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자)')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .action(async (options) => {
     try {
@@ -402,7 +404,7 @@ program
 
       // 무작위 duration 적용 (randomDuration 설정이 활성화된 경우)
       const randomDurationConfig = config.randomDuration || {};
-      if (randomDurationConfig.enabled) {
+      if (randomDurationConfig.enabled && !options.beatSync) {
         const min = randomDurationConfig.min || 5;
         const max = randomDurationConfig.max || 10;
         selectedPhotos.forEach(photo => {
@@ -415,6 +417,33 @@ program
         selectedPhotos.forEach((p, i) => {
           console.log(chalk.dim(`  [${i + 1}] ${p.title}: ${p.dynamicDuration}초`));
         });
+      }
+
+      // BGM 비트 동기화 적용 (--beat-sync 옵션)
+      if (options.beatSync) {
+        try {
+          // BPM 파싱 (프리셋 또는 숫자)
+          const bpmInput = isNaN(options.beatSync) ? options.beatSync : parseInt(options.beatSync);
+
+          selectedPhotos = applyBeatSync(selectedPhotos, {
+            bpm: bpmInput,
+            baseDuration: videoConfig.video?.photoDuration || 3
+          });
+
+          const summary = getBeatSyncSummary(selectedPhotos, videoConfig.video?.transitionDuration || 0.5);
+          if (summary) {
+            const presetInfo = BPM_PRESETS[options.beatSync];
+            const bpmLabel = presetInfo ? `${presetInfo.name} (${summary.bpm} BPM)` : `${summary.bpm} BPM`;
+            console.log(chalk.cyan(`🎵 비트 동기화: ${bpmLabel}`));
+            console.log(chalk.dim(`   비트 간격: ${summary.beatInterval}초, 총 ${summary.totalBeats}비트`));
+            selectedPhotos.forEach((p, i) => {
+              console.log(chalk.dim(`  [${i + 1}] ${p.title}: ${p.dynamicDuration?.toFixed(2)}초 (${p.beatSyncInfo?.beats}비트)`));
+            });
+          }
+        } catch (beatErr) {
+          console.log(chalk.yellow(`⚠️  비트 동기화 실패: ${beatErr.message}`));
+          console.log(chalk.dim('기본 재생시간으로 진행합니다.'));
+        }
       }
 
       // 출력 경로 결정
