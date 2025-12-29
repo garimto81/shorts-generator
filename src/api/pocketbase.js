@@ -6,9 +6,14 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'utf-8'));
 
-const API_URL = config.pocketbase.url;
+const API_URL = process.env.POCKETBASE_URL || config.pocketbase.url;
 const COLLECTION = config.pocketbase.collection;
-const AUTH_CONFIG = config.pocketbase.auth;
+
+// 환경변수 우선, config.json 폴백
+const AUTH_CONFIG = {
+  email: process.env.POCKETBASE_EMAIL || config.pocketbase.auth?.email || null,
+  password: process.env.POCKETBASE_PASSWORD || config.pocketbase.auth?.password || null
+};
 
 // PocketBase 클라이언트 초기화
 const pb = new PocketBase(API_URL);

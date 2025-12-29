@@ -3,6 +3,11 @@ temp/
 output/*.mp4
 *.log
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # Auth tokens
 .pb_token
 

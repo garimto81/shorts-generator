@@ -2,10 +2,7 @@
   "pocketbase": {
     "url": "https://union-public.pockethost.io",
     "collection": "photos",
-    "auth": {
-      "email": "aiden.kim@ggproduction.net",
-      "password": "qwer1234!@"
-    }
+    "auth": null
   },
   "video": {
     "width": 1080,
@@ -34,5 +31,22 @@
   "output": {
     "directory": "./output",
     "filenamePattern": "shorts_{timestamp}"
+  },
+  "ai": {
+    "enabled": false,
+    "provider": "gemini",
+    "model": "gemini-2.0-flash-exp",
+    "promptTemplate": "default"
+  },
+  "dynamicDuration": {
+    "enabled": false,
+    "readingSpeed": 250,
+    "minDuration": 2.0,
+    "maxDuration": 6.0
+  },
+  "randomDuration": {
+    "enabled": true,
+    "min": 5,
+    "max": 10
   }
 }

@@ -17,6 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | CLI | Commander.js + Inquirer (대화형) |
 | Backend | PocketBase (로컬 또는 PocketHost.io) |
 | API Client | PocketBase JavaScript SDK v0.26+ |
+| AI | Google Gemini API (자막 자동 생성) |
 
 ---
 
@@ -40,6 +41,7 @@ node src/index.js groups                          # 그룹 목록 조회
 node src/index.js list -n 10 --group <id>         # 그룹별 사진 조회
 node src/index.js create --group <id> --auto      # 그룹 기반 영상 생성
 node src/index.js create --ids abc123,def456 --transition fade
+node src/index.js create --auto --ai-subtitle     # AI 자막 자동 생성
 
 # PocketBase 초기 설정 (photos, photo_groups 컬렉션)
 node scripts/setup-pocketbase.js
@@ -64,6 +66,9 @@ node scripts/setup-pocketbase.js
 | `create` | `--thumbnail` | 영상 생성 후 썸네일 자동 생성 |
 | `create` | `--preview` | 저해상도 미리보기만 생성 (빠른 확인용) |
 | `create` | `-t, --template <name>` | 영상 템플릿 (classic, dynamic, elegant 등) |
+| `create` | `--ai-subtitle` | AI로 마케팅 자막 자동 생성 (GOOGLE_API_KEY 필요) |
+| `create` | `--prompt-template <type>` | AI 프롬프트 템플릿 (default/product/food/wheelRestoration) |
+| `create` | `--reading-speed <speed>` | 읽기 속도 (slow/normal/fast 또는 CPM 숫자) |
 | `thumbnail` | `-p, --position <pos>` | 썸네일 추출 위치 (start/middle/end 또는 초) |
 | `templates` | `-d, --detail` | 템플릿 상세 정보 표시 |
 
@@ -90,6 +95,10 @@ photos 컬렉션   배열 반환     temp/{id}.jpg    FFmpeg filter_complex
 | `src/video/templates.js` | 8개 템플릿 정의 (classic, dynamic, elegant, minimal, quick, cinematic 등) |
 | `src/video/preview.js` | 저해상도 미리보기 생성 (fast/balanced/quality 프리셋) |
 | `src/video/thumbnail.js` | 영상에서 썸네일 이미지 추출 |
+| `src/video/duration-calculator.js` | 읽기 속도 기반 동적 재생 시간 계산 |
+| `src/ai/subtitle-generator.js` | AI 자막 생성 통합 (이미지 분석 → 자막 → 재생 시간) |
+| `src/ai/vision.js` | Google Gemini Vision API 연동 (`analyzeImageBatch`) |
+| `src/ai/prompt-templates.js` | AI 프롬프트 템플릿 (default, product, food, wheelRestoration) |
 
 ### FFmpeg 파이프라인 (generator.js)
 
@@ -153,6 +162,39 @@ Ken Burns 표현식: `zoom=1.0+(0.15)*on/(duration*fps)` (zoom in/out 교차)
 | `branding.enabled` | | `true` | 로고 표시 여부 |
 | `subtitle.font` | | `./assets/fonts/NotoSansKR-Bold.otf` | 폰트 경로 |
 | `output.directory` | | `output` | 영상 출력 디렉토리 |
+| `ai.enabled` | | `false` | AI 자막 기본 활성화 |
+| `ai.provider` | | `gemini` | AI 제공자 |
+| `ai.model` | | `gemini-2.0-flash-exp` | Gemini 모델 |
+| `ai.promptTemplate` | | `default` | 기본 프롬프트 템플릿 |
+| `dynamicDuration.enabled` | | `false` | 자막 길이 기반 동적 재생 시간 |
+| `dynamicDuration.readingSpeed` | | `250` | 읽기 속도 (CPM) |
+| `randomDuration.enabled` | | `false` | 무작위 재생 시간 |
+| `randomDuration.min/max` | | `5/10` | 무작위 범위 (초) |
+
+### AI 자막 시스템
+
+```
+이미지 → Gemini Vision API → 마케팅 문구 생성 → 재생 시간 계산
+                ↓                    ↓                  ↓
+      analyzeImageBatch()     promptTemplate 적용   readingSpeed 기반
+```
+
+### 환경변수
+
+`.env.example`을 복사하여 `.env` 파일 생성:
+
+```bash
+cp .env.example .env
+```
+
+| 환경변수 | 설명 | 필수 |
+|----------|------|------|
+| `POCKETBASE_URL` | PocketBase 서버 URL | 선택 (config.json 폴백) |
+| `POCKETBASE_EMAIL` | Superuser 이메일 | 선택 |
+| `POCKETBASE_PASSWORD` | Superuser 비밀번호 | 선택 |
+| `GOOGLE_API_KEY` | Gemini API 키 | AI 자막 사용 시 필수 |
+
+API 키 발급: https://aistudio.google.com/apikey
 
 ---
 
@@ -215,6 +257,7 @@ node src/index.js create -g <group_id> --auto
 
 ## Do Not
 
-- **config.json 커밋 금지** - `pocketbase.auth` 인증 정보 포함
+- **.env 파일 커밋 금지** - 인증 정보 및 API 키 포함 (`.gitignore`에 등록됨)
 - **temp/ 디렉토리 수동 삭제 금지** - 영상 생성 중 사용
 - **package.json의 editly 의존성** - 현재 미사용 (FFmpeg 직접 호출)
+- **API 키 하드코딩 금지** - 환경변수 사용 필수 (`.env` 또는 시스템 환경변수)
