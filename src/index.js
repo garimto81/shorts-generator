@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
-import { generateVideo, TRANSITIONS, KEN_BURNS_PATTERN_NAMES, INTRO_OUTRO_PRESETS } from './video/generator.js';
+import { generateVideo, TRANSITIONS, KEN_BURNS_PATTERN_NAMES, INTRO_OUTRO_PRESETS, TRANSITION_MODES, TRANSITION_MODE_NAMES } from './video/generator.js';
 import { generateThumbnail, generateBestThumbnail, TEXT_OVERLAY_STYLES } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
@@ -132,6 +132,7 @@ program
   .option('--ai-review', 'AI 자막 생성 후 수정 기회 제공')
   .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
   .option('--beat-sync <bpm>', 'BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자)')
+  .option('--transition-mode <mode>', '전환 효과 모드 (single/sequential/random)', 'single')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .action(async (options) => {
     try {
@@ -485,6 +486,14 @@ program
         videoConfig.video.transition = options.transition;
       }
 
+      // CLI 옵션으로 전환 효과 모드 오버라이드
+      if (options.transitionMode) {
+        videoConfig.video.transitionMode = options.transitionMode;
+        if (options.transitionMode !== 'single') {
+          console.log(chalk.cyan(`🔄 전환 모드: ${TRANSITION_MODES[options.transitionMode]}`));
+        }
+      }
+
       // CLI 옵션으로 Ken Burns 모드 오버라이드
       if (options.kenBurnsMode) {
         videoConfig.template = videoConfig.template || {};
@@ -696,6 +705,10 @@ program
     console.log(chalk.dim(JSON.stringify(config, null, 2)));
     console.log('\n' + chalk.bold('🎞️  사용 가능한 전환 효과:'));
     TRANSITIONS.forEach(t => console.log(`  - ${t}`));
+    console.log('\n' + chalk.bold('🔄 전환 모드:'));
+    TRANSITION_MODE_NAMES.forEach(mode => {
+      console.log(`  - ${mode}: ${TRANSITION_MODES[mode]}`);
+    });
   });
 
 program.parse();

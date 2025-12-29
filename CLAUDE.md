@@ -70,6 +70,7 @@ node scripts/setup-pocketbase.js
 | `create` | `--prompt-template <type>` | AI 프롬프트 템플릿 (default/product/food/wheelRestoration) |
 | `create` | `--reading-speed <speed>` | 읽기 속도 (slow/normal/fast 또는 CPM 숫자) |
 | `create` | `--beat-sync <bpm>` | BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자) |
+| `create` | `--transition-mode <mode>` | 전환 효과 모드 (single/sequential/random) |
 | `thumbnail` | `-p, --position <pos>` | 썸네일 추출 위치 (start/middle/end 또는 초) |
 | `templates` | `-d, --detail` | 템플릿 상세 정보 표시 |
 
