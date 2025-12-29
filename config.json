@@ -14,7 +14,7 @@
   },
   "audio": {
     "bgmVolume": 0.3,
-    "defaultBgm": null
+    "defaultBgm": "upbeat_bgm.mp3"
   },
   "branding": {
     "logo": "./assets/logo.png",

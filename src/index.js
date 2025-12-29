@@ -277,6 +277,15 @@ program
         return;
       }
 
+      // 자동 모드에서 기본 BGM 적용
+      if (!options.bgm && config.audio?.defaultBgm) {
+        const defaultBgmPath = join(__dirname, '../assets/bgm', config.audio.defaultBgm);
+        if (existsSync(defaultBgmPath)) {
+          options.bgm = defaultBgmPath;
+          console.log(chalk.dim(`🎵 기본 BGM: ${config.audio.defaultBgm}`));
+        }
+      }
+
       // 이미지 다운로드
       const downloadSpinner = ora('이미지 다운로드 중...').start();
 

@@ -13,3 +13,8 @@ output/*.mp4
 
 # PocketBase data
 pb_data/
+
+# BGM files (local only)
+assets/bgm/*.mp3
+assets/bgm/*.wav
+!assets/bgm/upbeat_bgm.mp3

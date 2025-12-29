@@ -243,6 +243,8 @@ export async function generateVideo(photos, options = {}) {
   if (bgmEnabled) {
     const audioIdx = logoEnabled ? photoCount + 1 : photoCount;
     args.push('-map', `${audioIdx}:a`);
+    // 오디오 페이드인 적용 (시작 잡음 제거)
+    args.push('-af', 'afade=t=in:st=0:d=0.5');
     args.push('-c:a', 'aac', '-b:a', '128k', '-shortest');
   } else {
     args.push('-an');
