@@ -35,12 +35,14 @@ program
   .description('그룹(제품) 목록 조회')
   .option('-n, --limit <number>', '조회할 개수', '20')
   .option('--since <date>', '특정 날짜 이후 (YYYY-MM-DD)')
+  .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .action(async (options) => {
     const spinner = ora('그룹 목록 조회 중...').start();
     try {
       const groups = await fetchGroups({
         limit: parseInt(options.limit),
-        since: options.since
+        since: options.since,
+        sort: options.sort
       });
       spinner.succeed(`${groups.length}개 그룹 조회 완료`);
 
@@ -67,13 +69,15 @@ program
   .option('-n, --limit <number>', '조회할 개수', '20')
   .option('--since <date>', '특정 날짜 이후 (YYYY-MM-DD)')
   .option('-g, --group <id>', '특정 그룹의 사진만 조회')
+  .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .action(async (options) => {
     const spinner = ora('사진 목록 조회 중...').start();
     try {
       const photos = await fetchPhotos({
         limit: parseInt(options.limit),
         since: options.since,
-        groupId: options.group
+        groupId: options.group,
+        sort: options.sort
       });
       spinner.succeed(`${photos.length}개 사진 조회 완료`);
 
@@ -117,6 +121,7 @@ program
   .option('--ai-quality <level>', 'AI 자막 품질 레벨 (creative/balanced/conservative)', 'balanced')
   .option('--ai-review', 'AI 자막 생성 후 수정 기회 제공')
   .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
+  .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -132,7 +137,7 @@ program
       } else if (options.group) {
         // 그룹 지정 모드
         const spinner = ora(`그룹 사진 조회 중...`).start();
-        const photos = await fetchPhotosByGroup(options.group, { limit: 50 });
+        const photos = await fetchPhotosByGroup(options.group, { limit: 50, sort: options.sort });
         spinner.succeed(`${photos.length}개 사진 조회 완료`);
 
         if (photos.length === 0) {
@@ -204,8 +209,8 @@ program
           // 선택된 그룹의 사진 조회
           const photoSpinner = ora('사진 조회 중...').start();
           const photos = selectedGroupId
-            ? await fetchPhotosByGroup(selectedGroupId, { limit: 50 })
-            : await fetchPhotos({ limit: 50 });
+            ? await fetchPhotosByGroup(selectedGroupId, { limit: 50, sort: options.sort })
+            : await fetchPhotos({ limit: 50, sort: options.sort });
           photoSpinner.succeed();
 
           if (photos.length === 0) {
@@ -260,7 +265,7 @@ program
         } else {
           // 자동 모드 (그룹 미지정)
           const spinner = ora('사진 조회 중...').start();
-          const photos = await fetchPhotos({ limit: 50 });
+          const photos = await fetchPhotos({ limit: 50, sort: options.sort });
           spinner.succeed();
 
           if (photos.length === 0) {

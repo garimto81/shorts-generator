@@ -45,14 +45,31 @@ async function authenticate() {
 }
 
 /**
+ * 정렬 옵션을 PocketBase 형식으로 변환
+ * @param {string} sort - 정렬 옵션 (newest|oldest|title|title-desc 또는 PocketBase 형식)
+ * @returns {string} PocketBase 정렬 문자열
+ */
+function parseSortOption(sort) {
+  const sortMap = {
+    'newest': '-created',
+    'oldest': '+created',
+    'title': '+title',
+    'title-desc': '-title'
+  };
+  return sortMap[sort] || sort;
+}
+
+/**
  * 그룹 목록 조회
- * @param {Object} options - { limit, since }
+ * @param {Object} options - { limit, sort }
  * @returns {Promise<Array>} 그룹 배열
  */
 export async function fetchGroups(options = {}) {
-  const { limit = 20 } = options;
+  const { limit = 20, sort = 'newest' } = options;
 
-  const queryOptions = {};
+  const queryOptions = {
+    sort: parseSortOption(sort)
+  };
 
   let records;
   try {
@@ -71,14 +88,15 @@ export async function fetchGroups(options = {}) {
 /**
  * 특정 그룹의 사진 목록 조회
  * @param {string} groupId - 그룹 ID
- * @param {Object} options - { limit }
+ * @param {Object} options - { limit, sort }
  * @returns {Promise<Array>} 사진 배열
  */
 export async function fetchPhotosByGroup(groupId, options = {}) {
-  const { limit = 50 } = options;
+  const { limit = 50, sort = 'newest' } = options;
 
   const queryOptions = {
-    filter: `group = "${groupId}"`
+    filter: `group = "${groupId}"`,
+    sort: parseSortOption(sort)
   };
 
   let records;
@@ -110,13 +128,15 @@ export async function fetchPhotosByGroup(groupId, options = {}) {
 
 /**
  * 사진 목록 조회
- * @param {Object} options - { limit, since, groupId }
+ * @param {Object} options - { limit, groupId, sort }
  * @returns {Promise<Array>} 사진 배열
  */
 export async function fetchPhotos(options = {}) {
-  const { limit = 50, groupId = null } = options;
+  const { limit = 50, groupId = null, sort = 'newest' } = options;
 
-  const queryOptions = {};
+  const queryOptions = {
+    sort: parseSortOption(sort)
+  };
 
   if (groupId) {
     queryOptions.filter = `group = "${groupId}"`;
