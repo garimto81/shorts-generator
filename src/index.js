@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
-import { generateVideo, TRANSITIONS } from './video/generator.js';
+import { generateVideo, TRANSITIONS, KEN_BURNS_PATTERN_NAMES, INTRO_OUTRO_PRESETS } from './video/generator.js';
 import { generateThumbnail } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
@@ -114,6 +114,12 @@ program
   .option('--thumbnail', '영상 생성 후 썸네일 자동 생성')
   .option('--thumbnail-pos <pos>', '썸네일 위치 (start/middle/end 또는 초)', 'middle')
   .option('-t, --template <name>', '영상 템플릿 (classic, dynamic, elegant, minimal, quick, cinematic 등)')
+  .option('--ken-burns-mode <mode>', 'Ken Burns 패턴 모드 (classic/sequential/random)', 'sequential')
+  .option('--intro <text>', '인트로 텍스트 (예: 브랜드명)')
+  .option('--intro-preset <preset>', '인트로 프리셋 (simple/brand/minimal)', 'simple')
+  .option('--outro <text>', '아웃트로 텍스트 (예: Thank you)')
+  .option('--outro-sub <text>', '아웃트로 서브 텍스트 (예: 구독 부탁)')
+  .option('--outro-preset <preset>', '아웃트로 프리셋 (simple/brand/cta)', 'cta')
   .option('--preview', '저해상도 미리보기 영상만 생성')
   .option('--preview-quality <quality>', '미리보기 품질 (fast/balanced/quality)', 'fast')
   .option('--ai-subtitle', 'AI로 마케팅 자막 자동 생성 (GOOGLE_API_KEY 필요)')
@@ -445,6 +451,32 @@ program
       // CLI 옵션으로 전환 효과 오버라이드
       if (options.transition && options.transition !== 'directionalwipe') {
         videoConfig.video.transition = options.transition;
+      }
+
+      // CLI 옵션으로 Ken Burns 모드 오버라이드
+      if (options.kenBurnsMode) {
+        videoConfig.template = videoConfig.template || {};
+        videoConfig.template.kenBurnsMode = options.kenBurnsMode;
+      }
+
+      // 인트로/아웃트로 설정
+      if (options.intro) {
+        videoConfig.intro = {
+          enabled: true,
+          text: options.intro,
+          preset: options.introPreset || 'simple'
+        };
+        console.log(chalk.cyan(`🎬 인트로: "${options.intro}" (${options.introPreset || 'simple'})`));
+      }
+
+      if (options.outro) {
+        videoConfig.outro = {
+          enabled: true,
+          text: options.outro,
+          subText: options.outroSub,
+          preset: options.outroPreset || 'cta'
+        };
+        console.log(chalk.cyan(`🎬 아웃트로: "${options.outro}" (${options.outroPreset || 'cta'})`));
       }
 
       // 미리보기 모드 또는 일반 영상 생성
