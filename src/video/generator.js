@@ -8,6 +8,103 @@ import { SUBTITLE_POSITIONS, SUBTITLE_STYLES } from './templates.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
+ * Ken Burns 패턴 정의
+ * 각 패턴은 zoompan 필터의 z(줌), x(수평 위치), y(수직 위치) 표현식을 생성
+ */
+const KEN_BURNS_PATTERNS = {
+  // 기본 줌 인 (중앙)
+  zoomInCenter: (duration, fps, intensity) => ({
+    z: `1.0+(${intensity})*on/(${duration}*${fps})`,
+    x: 'iw/2-(iw/zoom/2)',
+    y: 'ih/2-(ih/zoom/2)'
+  }),
+  // 기본 줌 아웃 (중앙)
+  zoomOutCenter: (duration, fps, intensity) => ({
+    z: `(1.0+${intensity})-(${intensity})*on/(${duration}*${fps})`,
+    x: 'iw/2-(iw/zoom/2)',
+    y: 'ih/2-(ih/zoom/2)'
+  }),
+  // 좌상단에서 우하단으로 패닝 + 줌 인
+  panLeftTopToRightBottom: (duration, fps, intensity) => ({
+    z: `1.0+(${intensity})*on/(${duration}*${fps})`,
+    x: `(iw*0.1)+(iw*0.3)*on/(${duration}*${fps})`,
+    y: `(ih*0.1)+(ih*0.3)*on/(${duration}*${fps})`
+  }),
+  // 우상단에서 좌하단으로 패닝 + 줌 인
+  panRightTopToLeftBottom: (duration, fps, intensity) => ({
+    z: `1.0+(${intensity})*on/(${duration}*${fps})`,
+    x: `(iw*0.4)-(iw*0.3)*on/(${duration}*${fps})`,
+    y: `(ih*0.1)+(ih*0.3)*on/(${duration}*${fps})`
+  }),
+  // 좌우 패닝 (줌 고정)
+  panLeftToRight: (duration, fps, intensity) => ({
+    z: `1.0+${intensity * 0.5}`,
+    x: `(iw*0.1)+(iw*0.3)*on/(${duration}*${fps})`,
+    y: 'ih/2-(ih/zoom/2)'
+  }),
+  // 우좌 패닝 (줌 고정)
+  panRightToLeft: (duration, fps, intensity) => ({
+    z: `1.0+${intensity * 0.5}`,
+    x: `(iw*0.4)-(iw*0.3)*on/(${duration}*${fps})`,
+    y: 'ih/2-(ih/zoom/2)'
+  }),
+  // 상하 패닝 + 줌 아웃
+  panTopToBottom: (duration, fps, intensity) => ({
+    z: `(1.0+${intensity})-(${intensity * 0.5})*on/(${duration}*${fps})`,
+    x: 'iw/2-(iw/zoom/2)',
+    y: `(ih*0.15)+(ih*0.2)*on/(${duration}*${fps})`
+  }),
+  // 하상 패닝 + 줌 인
+  panBottomToTop: (duration, fps, intensity) => ({
+    z: `1.0+(${intensity * 0.5})*on/(${duration}*${fps})`,
+    x: 'iw/2-(iw/zoom/2)',
+    y: `(ih*0.35)-(ih*0.2)*on/(${duration}*${fps})`
+  })
+};
+
+/**
+ * Ken Burns 패턴 이름 목록
+ */
+export const KEN_BURNS_PATTERN_NAMES = Object.keys(KEN_BURNS_PATTERNS);
+
+/**
+ * Ken Burns 패턴 선택
+ * @param {number} index - 사진 인덱스
+ * @param {string} mode - 'sequential' | 'random' | 'classic'
+ * @returns {string} 패턴 이름
+ */
+function selectKenBurnsPattern(index, mode = 'sequential') {
+  const patterns = KEN_BURNS_PATTERN_NAMES;
+
+  if (mode === 'classic') {
+    // 기존 방식: zoom in/out 교차
+    return index % 2 === 0 ? 'zoomInCenter' : 'zoomOutCenter';
+  }
+
+  if (mode === 'random') {
+    return patterns[Math.floor(Math.random() * patterns.length)];
+  }
+
+  // sequential: 순서대로 순환
+  return patterns[index % patterns.length];
+}
+
+/**
+ * Ken Burns 효과 표현식 생성
+ * @param {number} index - 사진 인덱스
+ * @param {number} duration - 표시 시간 (초)
+ * @param {number} fps - 프레임 레이트
+ * @param {number} intensity - 줌 강도 (0.0 ~ 0.3)
+ * @param {string} mode - 패턴 선택 모드
+ * @returns {{z: string, x: string, y: string}}
+ */
+function getKenBurnsEffect(index, duration, fps, intensity, mode = 'sequential') {
+  const patternName = selectKenBurnsPattern(index, mode);
+  const patternFn = KEN_BURNS_PATTERNS[patternName];
+  return patternFn(duration, fps, intensity);
+}
+
+/**
  * Run FFmpeg command
  */
 function runFFmpeg(args) {
@@ -100,6 +197,7 @@ export async function generateVideo(photos, options = {}) {
   // Template settings
   const useKenBurns = templateConfig.kenBurns !== false;
   const zoomIntensity = templateConfig.zoomIntensity ?? 0.15;
+  const kenBurnsMode = templateConfig.kenBurnsMode || 'sequential';  // classic | sequential | random
   const subtitlePosition = templateConfig.subtitlePosition || 'bottom';
   const subtitleStyleName = templateConfig.subtitleStyle || 'default';
   const subtitleStyle = SUBTITLE_STYLES[subtitleStyleName] || SUBTITLE_STYLES.default;
@@ -133,17 +231,14 @@ export async function generateVideo(photos, options = {}) {
     const photoDuration = getPhotoDuration(photo);
 
     if (useKenBurns && zoomIntensity > 0) {
-      // Ken Burns: alternating zoom in/out
-      const zoomDirection = i % 2 === 0 ? 'in' : 'out';
-      const zoomStart = zoomDirection === 'in' ? 1.0 : (1.0 + zoomIntensity);
-      const zoomEnd = zoomDirection === 'in' ? (1.0 + zoomIntensity) : 1.0;
-      const zoomExpr = `${zoomStart}+(${zoomEnd}-${zoomStart})*on/(${photoDuration}*${fps})`;
+      // Ken Burns: 다양한 패턴 적용 (zoom + pan 조합)
+      const effect = getKenBurnsEffect(i, photoDuration, fps, zoomIntensity, kenBurnsMode);
 
       // Scale with Ken Burns (zoompan)
       filters.push(
         `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,` +
         `crop=${width * 2}:${height * 2},` +
-        `zoompan=z='${zoomExpr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${photoDuration * fps}:s=${width}x${height}:fps=${fps},` +
+        `zoompan=z='${effect.z}':x='${effect.x}':y='${effect.y}':d=${photoDuration * fps}:s=${width}x${height}:fps=${fps},` +
         `setsar=1[v${i}]`
       );
     } else {

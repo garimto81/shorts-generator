@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
-import { generateVideo, TRANSITIONS } from './video/generator.js';
+import { generateVideo, TRANSITIONS, KEN_BURNS_PATTERN_NAMES } from './video/generator.js';
 import { generateThumbnail } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
@@ -114,6 +114,7 @@ program
   .option('--thumbnail', '영상 생성 후 썸네일 자동 생성')
   .option('--thumbnail-pos <pos>', '썸네일 위치 (start/middle/end 또는 초)', 'middle')
   .option('-t, --template <name>', '영상 템플릿 (classic, dynamic, elegant, minimal, quick, cinematic 등)')
+  .option('--ken-burns-mode <mode>', 'Ken Burns 패턴 모드 (classic/sequential/random)', 'sequential')
   .option('--preview', '저해상도 미리보기 영상만 생성')
   .option('--preview-quality <quality>', '미리보기 품질 (fast/balanced/quality)', 'fast')
   .option('--ai-subtitle', 'AI로 마케팅 자막 자동 생성 (GOOGLE_API_KEY 필요)')
@@ -445,6 +446,12 @@ program
       // CLI 옵션으로 전환 효과 오버라이드
       if (options.transition && options.transition !== 'directionalwipe') {
         videoConfig.video.transition = options.transition;
+      }
+
+      // CLI 옵션으로 Ken Burns 모드 오버라이드
+      if (options.kenBurnsMode) {
+        videoConfig.template = videoConfig.template || {};
+        videoConfig.template.kenBurnsMode = options.kenBurnsMode;
       }
 
       // 미리보기 모드 또는 일반 영상 생성

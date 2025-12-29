@@ -13,6 +13,7 @@ export const TEMPLATES = {
     transitionDuration: 0.5,
     kenBurns: true,
     zoomIntensity: 0.15,
+    kenBurnsMode: 'classic',  // 기존 zoom in/out 교차
     subtitlePosition: 'bottom',
     subtitleStyle: 'default'
   },
@@ -20,12 +21,13 @@ export const TEMPLATES = {
   // 빠른 전환 - 역동적인 영상
   dynamic: {
     name: '다이나믹',
-    description: '빠른 전환과 강한 줌 효과',
+    description: '빠른 전환과 강한 줌 효과 + 다양한 움직임',
     photoDuration: 2,
     transition: 'slideright',
     transitionDuration: 0.3,
     kenBurns: true,
     zoomIntensity: 0.2,
+    kenBurnsMode: 'sequential',  // 8가지 패턴 순환
     subtitlePosition: 'bottom',
     subtitleStyle: 'bold'
   },
@@ -39,6 +41,7 @@ export const TEMPLATES = {
     transitionDuration: 1.0,
     kenBurns: true,
     zoomIntensity: 0.1,
+    kenBurnsMode: 'classic',
     subtitlePosition: 'bottom',
     subtitleStyle: 'elegant'
   },
@@ -59,12 +62,13 @@ export const TEMPLATES = {
   // 휠 복원 전문
   wheelRestoration: {
     name: '휠 복원',
-    description: '휠 복원 작업에 최적화',
+    description: '휠 복원 작업에 최적화 (다양한 앵글)',
     photoDuration: 3,
     transition: 'directionalwipe',
     transitionDuration: 0.5,
     kenBurns: true,
     zoomIntensity: 0.15,
+    kenBurnsMode: 'sequential',  // 다양한 패턴으로 디테일 강조
     subtitlePosition: 'bottom',
     subtitleStyle: 'default'
   },
@@ -78,6 +82,7 @@ export const TEMPLATES = {
     transitionDuration: 0.8,
     kenBurns: true,
     zoomIntensity: 0.12,
+    kenBurnsMode: 'classic',  // 심플하게 zoom in/out
     subtitlePosition: 'center',
     subtitleStyle: 'contrast'
   },
@@ -91,6 +96,7 @@ export const TEMPLATES = {
     transitionDuration: 0.2,
     kenBurns: true,
     zoomIntensity: 0.18,
+    kenBurnsMode: 'random',  // 무작위로 역동적
     subtitlePosition: 'bottom',
     subtitleStyle: 'bold'
   },
@@ -98,12 +104,13 @@ export const TEMPLATES = {
   // 시네마틱 - 영화같은 느낌
   cinematic: {
     name: '시네마틱',
-    description: '영화같은 분위기',
+    description: '영화같은 분위기 (부드러운 패닝)',
     photoDuration: 5,
     transition: 'fade',
     transitionDuration: 1.5,
     kenBurns: true,
     zoomIntensity: 0.08,
+    kenBurnsMode: 'sequential',  // 천천히 순환하며 시네마틱 효과
     subtitlePosition: 'bottom',
     subtitleStyle: 'cinematic'
   }
@@ -160,6 +167,7 @@ export function applyTemplate(config, templateName) {
       name: templateName,
       kenBurns: template.kenBurns,
       zoomIntensity: template.zoomIntensity,
+      kenBurnsMode: template.kenBurnsMode || 'sequential',
       subtitlePosition: template.subtitlePosition,
       subtitleStyle: template.subtitleStyle
     }
