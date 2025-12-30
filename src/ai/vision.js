@@ -42,6 +42,42 @@ function getDefaultModel() {
 const API_KEY = getApiKey();
 
 /**
+ * AI 응답에서 마크다운 및 불필요한 형식 제거
+ * @param {string} text - AI 응답 텍스트
+ * @returns {string} 정제된 텍스트
+ */
+function cleanSubtitle(text) {
+  if (!text) return text;
+
+  // 1. 여러 선택지가 있는 경우 첫 번째 따옴표 안의 내용만 추출
+  // 패턴: **선택 1:** "첫 번째" **선택 2:** "두 번째"
+  const quotedMatches = text.match(/"([^"]+)"/g);
+  if (quotedMatches && quotedMatches.length >= 1) {
+    // 첫 번째 따옴표 안의 내용 사용
+    text = quotedMatches[0].replace(/^"|"$/g, '');
+  }
+
+  let cleaned = text
+    // 마크다운 볼드 제거: **text** → text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    // 마크다운 이탤릭 제거: *text* → text
+    .replace(/\*([^*]+)\*/g, '$1')
+    // 선택지 형식 제거: 선택 1:, 선택 2: 등
+    .replace(/선택\s*\d+[:\s]*/gi, '')
+    // 번호 목록 제거: 1. 2. 3.
+    .replace(/^\d+\.\s*/gm, '')
+    // 앞뒤 따옴표 제거
+    .replace(/^["'「」『』]+|["'「」『』]+$/g, '')
+    // 줄바꿈을 공백으로 변환 (다중 줄 응답 처리)
+    .replace(/\n+/g, ' ')
+    // 다중 공백을 단일 공백으로
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned;
+}
+
+/**
  * Gemini 모델 인스턴스 가져오기
  * @param {string} modelName - 모델 이름
  * @returns {GenerativeModel}
@@ -111,8 +147,8 @@ export async function analyzeImage(imagePath, options = {}) {
   const response = result.response;
   const text = response.text().trim();
 
-  // 따옴표 제거 (AI가 때때로 따옴표로 감싸서 응답)
-  return text.replace(/^["']|["']$/g, '');
+  // 마크다운 및 불필요한 형식 제거
+  return cleanSubtitle(text);
 }
 
 /**
