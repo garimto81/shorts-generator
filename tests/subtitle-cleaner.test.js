@@ -18,10 +18,12 @@ function cleanSubtitle(text) {
   }
 
   let cleaned = text
+    .replace(/^#{1,6}\s*/gm, '')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/선택\s*\d+[:\s]*/gi, '')
     .replace(/^\d+\.\s*/gm, '')
+    .replace(/^[가-힣\s]+자막[:\s]*/gi, '')
     .replace(/^["'「」『』]+|["'「」『』]+$/g, '')
     .replace(/\n+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -45,6 +47,21 @@ describe('cleanSubtitle', () => {
     it('should remove mixed markdown', () => {
       const input = '**장인의 손길**, *휠 복원의 가치*';
       assert.equal(cleanSubtitle(input), '장인의 손길, 휠 복원의 가치');
+    });
+
+    it('should remove ## heading', () => {
+      const input = '## 휠 복원 마케팅 자막: 새 휠 같은 완벽 복원!';
+      assert.equal(cleanSubtitle(input), '새 휠 같은 완벽 복원!');
+    });
+
+    it('should remove # single heading', () => {
+      const input = '# 완벽한 휠 복원';
+      assert.equal(cleanSubtitle(input), '완벽한 휠 복원');
+    });
+
+    it('should remove ### triple heading', () => {
+      const input = '### 새 휠로 다시 태어나다';
+      assert.equal(cleanSubtitle(input), '새 휠로 다시 태어나다');
     });
   });
 

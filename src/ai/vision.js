@@ -58,6 +58,8 @@ function cleanSubtitle(text) {
   }
 
   let cleaned = text
+    // 마크다운 헤딩 제거: ## 제목 → 제목
+    .replace(/^#{1,6}\s*/gm, '')
     // 마크다운 볼드 제거: **text** → text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     // 마크다운 이탤릭 제거: *text* → text
@@ -66,6 +68,8 @@ function cleanSubtitle(text) {
     .replace(/선택\s*\d+[:\s]*/gi, '')
     // 번호 목록 제거: 1. 2. 3.
     .replace(/^\d+\.\s*/gm, '')
+    // 라벨 형식 제거: "휠 복원 마케팅 자막:" 등
+    .replace(/^[가-힣\s]+자막[:\s]*/gi, '')
     // 앞뒤 따옴표 제거
     .replace(/^["'「」『』]+|["'「」『』]+$/g, '')
     // 줄바꿈을 공백으로 변환 (다중 줄 응답 처리)
