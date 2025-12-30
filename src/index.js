@@ -275,19 +275,32 @@ program
             }
           }
         } else {
-          // 자동 모드 (그룹 미지정)
-          const spinner = ora('사진 조회 중...').start();
-          const photos = await fetchPhotos({ limit: 50, sort: options.sort });
-          spinner.succeed();
+          // 자동 모드 (그룹 미지정) - 가장 최근 그룹 자동 선택
+          const groupSpinner = ora('그룹 조회 중...').start();
+          const groups = await fetchGroups({ limit: 1, sort: 'newest' });
+
+          if (groups.length === 0) {
+            groupSpinner.fail('그룹이 없습니다.');
+            console.log(chalk.yellow('먼저 Field Uploader로 그룹을 생성하세요.'));
+            return;
+          }
+
+          const latestGroup = groups[0];
+          groupSpinner.succeed(`최신 그룹 선택: [${latestGroup.title}]`);
+          selectedGroupTitle = latestGroup.title;
+
+          const photoSpinner = ora('사진 조회 중...').start();
+          const photos = await fetchPhotosByGroup(latestGroup.id, { limit: 50, sort: options.sort });
+          photoSpinner.succeed();
 
           if (photos.length === 0) {
-            console.log(chalk.yellow('사진이 없습니다. 먼저 Field Uploader로 업로드하세요.'));
+            console.log(chalk.yellow('해당 그룹에 사진이 없습니다. 먼저 Field Uploader로 업로드하세요.'));
             return;
           }
 
           const validPhotos = photos.filter(p => p.imageUrl);
           selectedPhotos = validPhotos.slice(0, parseInt(options.count));
-          console.log(chalk.green(`✓ 최신 ${selectedPhotos.length}개 사진 선택됨 (이미지 있음)`));
+          console.log(chalk.green(`✓ 그룹 [${latestGroup.title}] 최신 ${selectedPhotos.length}개 사진 선택됨`));
         }
       }
 
