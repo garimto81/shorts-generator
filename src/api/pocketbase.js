@@ -2,6 +2,7 @@ import PocketBase from 'pocketbase';
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { sortPhotos, SORT_MODES } from '../utils/photo-sorter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(join(__dirname, '../../config.json'), 'utf-8'));
@@ -89,11 +90,11 @@ export async function fetchGroups(options = {}) {
 /**
  * 특정 그룹의 사진 목록 조회
  * @param {string} groupId - 그룹 ID
- * @param {Object} options - { limit, sort }
+ * @param {Object} options - { limit, sort, filenameSort }
  * @returns {Promise<Array>} 사진 배열
  */
 export async function fetchPhotosByGroup(groupId, options = {}) {
-  const { limit = 50, sort = 'newest' } = options;
+  const { limit = 50, sort = 'newest', filenameSort = 'filename' } = options;
 
   const queryOptions = {
     filter: `group = "${groupId}"`,
@@ -117,23 +118,31 @@ export async function fetchPhotosByGroup(groupId, options = {}) {
     // 그룹 조회 실패 시 무시
   }
 
-  return records.items.map(item => ({
+  let photos = records.items.map(item => ({
     id: item.id,
     title: item.title,
+    image: item.image,  // 파일명 (정렬용)
     groupId: item.group || null,
     groupTitle: groupTitle,
     imageUrl: item.image ? pb.files.getURL(item, item.image) : null,
     thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null
   }));
+
+  // 파일명 기반 정렬 적용 (기본값: filename)
+  if (filenameSort && filenameSort !== 'none') {
+    photos = sortPhotos(photos, filenameSort);
+  }
+
+  return photos;
 }
 
 /**
  * 사진 목록 조회
- * @param {Object} options - { limit, groupId, sort }
+ * @param {Object} options - { limit, groupId, sort, filenameSort }
  * @returns {Promise<Array>} 사진 배열
  */
 export async function fetchPhotos(options = {}) {
-  const { limit = 50, groupId = null, sort = 'newest' } = options;
+  const { limit = 50, groupId = null, sort = 'newest', filenameSort = 'filename' } = options;
 
   const queryOptions = {
     sort: parseSortOption(sort)
@@ -165,14 +174,22 @@ export async function fetchPhotos(options = {}) {
     }
   }
 
-  return records.items.map(item => ({
+  let photos = records.items.map(item => ({
     id: item.id,
     title: item.title,
+    image: item.image,  // 파일명 (정렬용)
     groupId: item.group || null,
     groupTitle: groupMap[item.group] || null,
     imageUrl: item.image ? pb.files.getURL(item, item.image) : null,
     thumbnailUrl: item.thumbnail ? pb.files.getURL(item, item.thumbnail) : null
   }));
+
+  // 파일명 기반 정렬 적용 (기본값: filename)
+  if (filenameSort && filenameSort !== 'none') {
+    photos = sortPhotos(photos, filenameSort);
+  }
+
+  return photos;
 }
 
 /**

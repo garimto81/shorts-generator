@@ -71,6 +71,7 @@ program
   .option('--since <date>', '특정 날짜 이후 (YYYY-MM-DD)')
   .option('-g, --group <id>', '특정 그룹의 사진만 조회')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
+  .option('--filename-sort <mode>', '파일명 기반 정렬 (filename|none)', 'filename')
   .action(async (options) => {
     const spinner = ora('사진 목록 조회 중...').start();
     try {
@@ -78,7 +79,8 @@ program
         limit: parseInt(options.limit),
         since: options.since,
         groupId: options.group,
-        sort: options.sort
+        sort: options.sort,
+        filenameSort: options.filenameSort
       });
       spinner.succeed(`${photos.length}개 사진 조회 완료`);
 
@@ -134,6 +136,7 @@ program
   .option('--beat-sync <bpm>', 'BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자)')
   .option('--transition-mode <mode>', '전환 효과 모드 (single/sequential/random)', 'single')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
+  .option('--filename-sort <mode>', '파일명 기반 정렬 (filename|none)', 'filename')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -149,7 +152,11 @@ program
       } else if (options.group) {
         // 그룹 지정 모드
         const spinner = ora(`그룹 사진 조회 중...`).start();
-        const photos = await fetchPhotosByGroup(options.group, { limit: 50, sort: options.sort });
+        const photos = await fetchPhotosByGroup(options.group, {
+          limit: 50,
+          sort: options.sort,
+          filenameSort: options.filenameSort
+        });
         spinner.succeed(`${photos.length}개 사진 조회 완료`);
 
         if (photos.length === 0) {
@@ -221,8 +228,16 @@ program
           // 선택된 그룹의 사진 조회
           const photoSpinner = ora('사진 조회 중...').start();
           const photos = selectedGroupId
-            ? await fetchPhotosByGroup(selectedGroupId, { limit: 50, sort: options.sort })
-            : await fetchPhotos({ limit: 50, sort: options.sort });
+            ? await fetchPhotosByGroup(selectedGroupId, {
+                limit: 50,
+                sort: options.sort,
+                filenameSort: options.filenameSort
+              })
+            : await fetchPhotos({
+                limit: 50,
+                sort: options.sort,
+                filenameSort: options.filenameSort
+              });
           photoSpinner.succeed();
 
           if (photos.length === 0) {
@@ -290,7 +305,11 @@ program
           selectedGroupTitle = latestGroup.title;
 
           const photoSpinner = ora('사진 조회 중...').start();
-          const photos = await fetchPhotosByGroup(latestGroup.id, { limit: 50, sort: options.sort });
+          const photos = await fetchPhotosByGroup(latestGroup.id, {
+            limit: 50,
+            sort: options.sort,
+            filenameSort: options.filenameSort
+          });
           photoSpinner.succeed();
 
           if (photos.length === 0) {
