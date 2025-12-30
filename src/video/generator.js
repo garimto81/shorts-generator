@@ -144,25 +144,73 @@ function escapeText(text) {
 }
 
 /**
+ * 전환 효과 매핑 (CLI 이름 → FFmpeg xfade 이름)
+ */
+const TRANSITION_MAP = {
+  'fade': 'fade',
+  'crossfade': 'fade',
+  'directionalwipe': 'wipeleft',
+  'slideright': 'slideright',
+  'slideleft': 'slideleft',
+  'slideup': 'slideup',
+  'slidedown': 'slidedown',
+  'radial': 'radial',
+  'circleopen': 'circleopen',
+  'directional': 'wiperight'
+};
+
+/**
+ * 자동 순환에 적합한 전환 효과 목록 (fade 제외한 시각적 효과)
+ */
+const CYCLE_TRANSITIONS = [
+  'slideright',
+  'slideleft',
+  'slideup',
+  'slidedown',
+  'radial',
+  'circleopen',
+  'wipeleft',
+  'wiperight'
+];
+
+/**
+ * 전환 모드 정의
+ */
+export const TRANSITION_MODES = {
+  single: '단일 전환 (동일한 효과 반복)',
+  sequential: '순차 순환 (전환 효과 순서대로 적용)',
+  random: '무작위 (매번 다른 전환 효과)'
+};
+
+export const TRANSITION_MODE_NAMES = Object.keys(TRANSITION_MODES);
+
+/**
  * Get transition filter between two clips
  * @param {string} transition - Transition type
  * @param {number} duration - Transition duration in seconds
  * @returns {string} FFmpeg xfade filter string
  */
 function getTransitionFilter(transition, duration) {
-  const transitions = {
-    'fade': 'fade',
-    'crossfade': 'fade',
-    'directionalwipe': 'wipeleft',
-    'slideright': 'slideright',
-    'slideleft': 'slideleft',
-    'slideup': 'slideup',
-    'slidedown': 'slidedown',
-    'radial': 'radial',
-    'circleopen': 'circleopen',
-    'directional': 'wiperight'
-  };
-  return transitions[transition] || 'fade';
+  return TRANSITION_MAP[transition] || 'fade';
+}
+
+/**
+ * 전환 모드에 따라 적절한 전환 효과 선택
+ * @param {number} index - 현재 전환 인덱스 (0부터 시작)
+ * @param {string} mode - 전환 모드 (single | sequential | random)
+ * @param {string} defaultTransition - 기본 전환 효과
+ * @returns {string} FFmpeg xfade 전환 효과 이름
+ */
+function selectTransition(index, mode, defaultTransition) {
+  switch (mode) {
+    case 'sequential':
+      return CYCLE_TRANSITIONS[index % CYCLE_TRANSITIONS.length];
+    case 'random':
+      return CYCLE_TRANSITIONS[Math.floor(Math.random() * CYCLE_TRANSITIONS.length)];
+    case 'single':
+    default:
+      return getTransitionFilter(defaultTransition);
+  }
 }
 
 /**
@@ -191,6 +239,7 @@ export async function generateVideo(photos, options = {}) {
   const fps = videoConfig.fps || 30;
   const transitionDuration = videoConfig.transitionDuration || 0.5;
   const transition = videoConfig.transition || 'fade';
+  const transitionMode = videoConfig.transitionMode || 'single';  // single | sequential | random
 
   // 사진별 개별 duration 가져오기 (동적 duration 지원)
   const getPhotoDuration = (photo) => {
@@ -368,7 +417,6 @@ export async function generateVideo(photos, options = {}) {
       filters.push(`[vmain]null[vout]`);
     }
   } else {
-    const xfadeTransition = getTransitionFilter(transition, transitionDuration);
     let prevOutput = 'vt0';
 
     // 누적 duration 기반 offset 계산 (동적 duration 지원)
@@ -378,6 +426,9 @@ export async function generateVideo(photos, options = {}) {
       // offset = 이전 클립들의 총 길이 - 누적 전환 시간
       const offset = cumulativeDuration - transitionDuration;
       const outputLabel = i === photoCount - 1 ? 'vmerged' : `vx${i}`;
+
+      // 전환 모드에 따라 전환 효과 선택 (인덱스는 0부터)
+      const xfadeTransition = selectTransition(i - 1, transitionMode, transition);
 
       filters.push(
         `[${prevOutput}][vt${i}]xfade=transition=${xfadeTransition}:duration=${transitionDuration}:offset=${offset}[${outputLabel}]`

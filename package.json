@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node src/index.js",
     "list": "node src/index.js list",
-    "create": "node src/index.js create"
+    "create": "node src/index.js create",
+    "test": "node --test tests/**/*.test.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -5,12 +5,13 @@ import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
 import { fetchPhotos, downloadImage, fetchGroups, fetchPhotosByGroup } from './api/pocketbase.js';
-import { generateVideo, TRANSITIONS, KEN_BURNS_PATTERN_NAMES, INTRO_OUTRO_PRESETS } from './video/generator.js';
-import { generateThumbnail } from './video/thumbnail.js';
+import { generateVideo, TRANSITIONS, KEN_BURNS_PATTERN_NAMES, INTRO_OUTRO_PRESETS, TRANSITION_MODES, TRANSITION_MODE_NAMES } from './video/generator.js';
+import { generateThumbnail, generateBestThumbnail, TEXT_OVERLAY_STYLES } from './video/thumbnail.js';
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
 import { generateSubtitles, checkAvailability, PROMPT_TYPES, QUALITY_LEVELS } from './ai/subtitle-generator.js';
 import { READING_SPEED_PRESETS } from './video/duration-calculator.js';
+import { applyBeatSync, getBeatSyncSummary, BPM_PRESETS, BPM_PRESET_NAMES } from './audio/beat-sync.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -113,6 +114,9 @@ program
   .option('--ids <ids>', '사진 ID 목록 (쉼표 구분)')
   .option('--thumbnail', '영상 생성 후 썸네일 자동 생성')
   .option('--thumbnail-pos <pos>', '썸네일 위치 (start/middle/end 또는 초)', 'middle')
+  .option('--thumbnail-text <text>', '썸네일 텍스트 오버레이')
+  .option('--thumbnail-style <style>', '썸네일 텍스트 스타일 (default/banner/centered/minimal)', 'default')
+  .option('--thumbnail-best', '최적 프레임 자동 선택 (5개 후보 비교)')
   .option('-t, --template <name>', '영상 템플릿 (classic, dynamic, elegant, minimal, quick, cinematic 등)')
   .option('--ken-burns-mode <mode>', 'Ken Burns 패턴 모드 (classic/sequential/random)', 'sequential')
   .option('--intro <text>', '인트로 텍스트 (예: 브랜드명)')
@@ -127,6 +131,8 @@ program
   .option('--ai-quality <level>', 'AI 자막 품질 레벨 (creative/balanced/conservative)', 'balanced')
   .option('--ai-review', 'AI 자막 생성 후 수정 기회 제공')
   .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
+  .option('--beat-sync <bpm>', 'BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자)')
+  .option('--transition-mode <mode>', '전환 효과 모드 (single/sequential/random)', 'single')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .action(async (options) => {
     try {
@@ -399,7 +405,7 @@ program
 
       // 무작위 duration 적용 (randomDuration 설정이 활성화된 경우)
       const randomDurationConfig = config.randomDuration || {};
-      if (randomDurationConfig.enabled) {
+      if (randomDurationConfig.enabled && !options.beatSync) {
         const min = randomDurationConfig.min || 5;
         const max = randomDurationConfig.max || 10;
         selectedPhotos.forEach(photo => {
@@ -412,6 +418,33 @@ program
         selectedPhotos.forEach((p, i) => {
           console.log(chalk.dim(`  [${i + 1}] ${p.title}: ${p.dynamicDuration}초`));
         });
+      }
+
+      // BGM 비트 동기화 적용 (--beat-sync 옵션)
+      if (options.beatSync) {
+        try {
+          // BPM 파싱 (프리셋 또는 숫자)
+          const bpmInput = isNaN(options.beatSync) ? options.beatSync : parseInt(options.beatSync);
+
+          selectedPhotos = applyBeatSync(selectedPhotos, {
+            bpm: bpmInput,
+            baseDuration: videoConfig.video?.photoDuration || 3
+          });
+
+          const summary = getBeatSyncSummary(selectedPhotos, videoConfig.video?.transitionDuration || 0.5);
+          if (summary) {
+            const presetInfo = BPM_PRESETS[options.beatSync];
+            const bpmLabel = presetInfo ? `${presetInfo.name} (${summary.bpm} BPM)` : `${summary.bpm} BPM`;
+            console.log(chalk.cyan(`🎵 비트 동기화: ${bpmLabel}`));
+            console.log(chalk.dim(`   비트 간격: ${summary.beatInterval}초, 총 ${summary.totalBeats}비트`));
+            selectedPhotos.forEach((p, i) => {
+              console.log(chalk.dim(`  [${i + 1}] ${p.title}: ${p.dynamicDuration?.toFixed(2)}초 (${p.beatSyncInfo?.beats}비트)`));
+            });
+          }
+        } catch (beatErr) {
+          console.log(chalk.yellow(`⚠️  비트 동기화 실패: ${beatErr.message}`));
+          console.log(chalk.dim('기본 재생시간으로 진행합니다.'));
+        }
       }
 
       // 출력 경로 결정
@@ -451,6 +484,14 @@ program
       // CLI 옵션으로 전환 효과 오버라이드
       if (options.transition && options.transition !== 'directionalwipe') {
         videoConfig.video.transition = options.transition;
+      }
+
+      // CLI 옵션으로 전환 효과 모드 오버라이드
+      if (options.transitionMode) {
+        videoConfig.video.transitionMode = options.transitionMode;
+        if (options.transitionMode !== 'single') {
+          console.log(chalk.cyan(`🔄 전환 모드: ${TRANSITION_MODES[options.transitionMode]}`));
+        }
       }
 
       // CLI 옵션으로 Ken Burns 모드 오버라이드
@@ -536,13 +577,31 @@ program
             const thumbSpinner = ora('🖼️  썸네일 생성 중...').start();
             try {
               const position = isNaN(options.thumbnailPos) ? options.thumbnailPos : parseFloat(options.thumbnailPos);
-              const thumbPath = await generateThumbnail(outputPath, null, {
+              const thumbOptions = {
                 position,
                 width: config.video.width,
-                height: config.video.height
-              });
+                height: config.video.height,
+                text: options.thumbnailText,
+                textStyle: options.thumbnailStyle || 'default'
+              };
+
+              let thumbPath;
+              if (options.thumbnailBest) {
+                // 최적 프레임 자동 선택
+                thumbSpinner.text = '🖼️  최적 썸네일 선택 중... (5개 후보 분석)';
+                thumbPath = await generateBestThumbnail(outputPath, null, thumbOptions);
+              } else {
+                thumbPath = await generateThumbnail(outputPath, null, thumbOptions);
+              }
+
               thumbSpinner.succeed(chalk.green('✅ 썸네일 생성 완료!'));
               console.log(`🖼️  썸네일: ${chalk.cyan(thumbPath)}`);
+              if (options.thumbnailText) {
+                console.log(`📝 텍스트: "${options.thumbnailText}" (${options.thumbnailStyle || 'default'})`);
+              }
+              if (options.thumbnailBest) {
+                console.log(chalk.dim('🔍 최적 프레임 자동 선택됨'));
+              }
             } catch (thumbErr) {
               thumbSpinner.fail('썸네일 생성 실패: ' + thumbErr.message);
             }
@@ -566,6 +625,9 @@ program
   .description('기존 영상에서 썸네일 생성')
   .option('-o, --output <path>', '출력 경로')
   .option('-p, --position <pos>', '위치 (start/middle/end 또는 초)', 'middle')
+  .option('-t, --text <text>', '텍스트 오버레이')
+  .option('-s, --style <style>', '텍스트 스타일 (default/banner/centered/minimal)', 'default')
+  .option('-b, --best', '최적 프레임 자동 선택')
   .action(async (videoPath, options) => {
     const spinner = ora('🖼️  썸네일 생성 중...').start();
     try {
@@ -575,16 +637,34 @@ program
       }
 
       const position = isNaN(options.position) ? options.position : parseFloat(options.position);
-      const thumbPath = await generateThumbnail(videoPath, options.output, {
+      const thumbOptions = {
         position,
         width: config.video.width,
-        height: config.video.height
-      });
+        height: config.video.height,
+        text: options.text,
+        textStyle: options.style || 'default'
+      };
+
+      let thumbPath;
+      if (options.best) {
+        spinner.text = '🖼️  최적 썸네일 선택 중... (5개 후보 분석)';
+        thumbPath = await generateBestThumbnail(videoPath, options.output, thumbOptions);
+      } else {
+        thumbPath = await generateThumbnail(videoPath, options.output, thumbOptions);
+      }
 
       spinner.succeed(chalk.green('✅ 썸네일 생성 완료!'));
       console.log(`\n🖼️  출력 파일: ${chalk.cyan(thumbPath)}`);
       console.log(`📐 해상도: ${config.video.width}x${config.video.height}`);
-      console.log(`📍 위치: ${options.position}`);
+      if (!options.best) {
+        console.log(`📍 위치: ${options.position}`);
+      }
+      if (options.text) {
+        console.log(`📝 텍스트: "${options.text}" (${options.style || 'default'})`);
+      }
+      if (options.best) {
+        console.log(chalk.dim('🔍 최적 프레임 자동 선택됨'));
+      }
     } catch (err) {
       spinner.fail('썸네일 생성 실패: ' + err.message);
       console.error(chalk.dim(err.stack));
@@ -625,6 +705,10 @@ program
     console.log(chalk.dim(JSON.stringify(config, null, 2)));
     console.log('\n' + chalk.bold('🎞️  사용 가능한 전환 효과:'));
     TRANSITIONS.forEach(t => console.log(`  - ${t}`));
+    console.log('\n' + chalk.bold('🔄 전환 모드:'));
+    TRANSITION_MODE_NAMES.forEach(mode => {
+      console.log(`  - ${mode}: ${TRANSITION_MODES[mode]}`);
+    });
   });
 
 program.parse();
