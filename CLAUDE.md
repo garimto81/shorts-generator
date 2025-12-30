@@ -30,8 +30,8 @@ docker-compose build shorts-gen                   # 최초 빌드
 docker-compose run --rm shorts-gen groups         # 그룹 목록 조회
 docker-compose run --rm shorts-gen list           # 사진 목록 조회
 docker-compose run --rm shorts-gen list -g <id>   # 특정 그룹 사진 조회
-docker-compose run --rm shorts-gen create --auto  # 자동 모드 (최신 5개)
-docker-compose run --rm shorts-gen create -g <id> --auto  # 그룹 지정 자동 모드
+docker-compose run --rm shorts-gen create --auto  # 자동 모드 (최신 그룹)
+docker-compose run --rm shorts-gen create -g <id> --auto -n 50  # 그룹 전체 사진 사용
 docker-compose run --rm -it shorts-gen create     # 대화형 모드 (그룹 선택 → 사진 선택)
 docker-compose run --rm shorts-gen config         # 설정/전환효과 목록
 
@@ -39,7 +39,7 @@ docker-compose run --rm shorts-gen config         # 설정/전환효과 목록
 npm install
 node src/index.js groups                          # 그룹 목록 조회
 node src/index.js list -n 10 --group <id>         # 그룹별 사진 조회
-node src/index.js create --group <id> --auto      # 그룹 기반 영상 생성
+node src/index.js create --group <id> --auto -n 50  # 그룹 전체 사진으로 영상 생성
 node src/index.js create --ids abc123,def456 --transition fade
 node src/index.js create --auto --ai-subtitle     # AI 자막 자동 생성
 
@@ -57,7 +57,7 @@ node scripts/setup-pocketbase.js
 | `list` | `-g, --group <id>` | 특정 그룹의 사진만 조회 |
 | `list` | `--since <YYYY-MM-DD>` | 특정 날짜 이후 필터 |
 | `create` | `--auto` | 자동 모드 (대화형 프롬프트 생략) |
-| `create` | `-n, --count <number>` | 사진 개수 (기본 5) |
+| `create` | `-n, --count <number>` | 사진 개수 (기본 5, **그룹 전체 사용 시 50 권장**) |
 | `create` | `-g, --group <id>` | 특정 그룹의 사진으로 영상 생성 |
 | `create` | `--ids <id1,id2,...>` | 특정 사진 ID 지정 |
 | `create` | `--transition <name>` | 전환 효과 (fade, slideright 등) |
@@ -73,6 +73,22 @@ node scripts/setup-pocketbase.js
 | `create` | `--transition-mode <mode>` | 전환 효과 모드 (single/sequential/random) |
 | `thumbnail` | `-p, --position <pos>` | 썸네일 추출 위치 (start/middle/end 또는 초) |
 | `templates` | `-d, --detail` | 템플릿 상세 정보 표시 |
+
+### 영상 생성 필수 규칙
+
+| 규칙 | 설명 |
+|------|------|
+| **그룹 전체 사진 사용** | 영상 생성 시 `-n 50` 옵션으로 그룹의 모든 사진 포함 (기본값 5는 테스트용) |
+| **그룹 지정 필수** | `-g <id>` 옵션으로 특정 그룹 지정 (혼합 방지) |
+| **미리보기 먼저** | `--preview`로 확인 후 본 영상 생성 권장 |
+
+```bash
+# 올바른 사용 예시
+node src/index.js create -g <group_id> --auto -n 50
+
+# 잘못된 사용 (5장만 사용됨)
+node src/index.js create -g <group_id> --auto
+```
 
 ---
 
