@@ -9,7 +9,13 @@ import { promises as fs } from 'fs';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getPrompt } from './prompt-templates.js';
+import {
+  getPrompt,
+  getPromptWithExamples,
+  FEATURE_EXTRACTION_PROMPT,
+  BATCH_FEATURE_EXTRACTION_PROMPT,
+  getFeatureBasedSubtitlePrompt
+} from './prompt-templates.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -130,18 +136,26 @@ async function imageToBase64(imagePath) {
  * @param {string} options.promptTemplate - 프롬프트 템플릿 타입
  * @param {string} options.quality - 품질 레벨 (creative|balanced|conservative)
  * @param {string} options.model - Gemini 모델 이름
+ * @param {string} options.customExamplesPath - 커스텀 예시 파일 경로 (v2.0)
+ * @param {boolean} options.useFewShot - Few-Shot 예시 사용 여부 (기본 true)
  * @returns {Promise<string>} 생성된 자막
  */
 export async function analyzeImage(imagePath, options = {}) {
   const {
     promptTemplate = 'default',
     quality = 'balanced',
-    model: modelName
+    model: modelName,
+    customExamplesPath = null,
+    useFewShot = true
   } = options;
 
   const model = getModel(modelName);
   const { data, mimeType } = await imageToBase64(imagePath);
-  const prompt = getPrompt(promptTemplate, quality);
+
+  // v2.0: Few-Shot 예시 사용 여부에 따라 프롬프트 선택
+  const prompt = useFewShot
+    ? getPromptWithExamples(promptTemplate, quality, { customExamplesPath })
+    : getPrompt(promptTemplate, quality);
 
   const result = await model.generateContent([
     { inlineData: { mimeType, data } },
@@ -162,6 +176,8 @@ export async function analyzeImage(imagePath, options = {}) {
  * @param {string} options.promptTemplate - 프롬프트 템플릿 타입
  * @param {string} options.quality - 품질 레벨 (creative|balanced|conservative)
  * @param {string} options.model - Gemini 모델 이름
+ * @param {string} options.customExamplesPath - 커스텀 예시 파일 경로 (v2.0)
+ * @param {boolean} options.useFewShot - Few-Shot 예시 사용 여부 (기본 true)
  * @param {number} options.delayMs - 요청 간 지연 시간 (ms)
  * @param {Function} options.onProgress - 진행 상황 콜백
  * @returns {Promise<Map<string, string>>} ID별 자막 맵
@@ -171,6 +187,8 @@ export async function analyzeImageBatch(photos, options = {}) {
     promptTemplate = 'default',
     quality = 'balanced',
     model,
+    customExamplesPath = null,
+    useFewShot = true,
     delayMs = 1000, // rate limit 방지
     onProgress
   } = options;
@@ -189,7 +207,9 @@ export async function analyzeImageBatch(photos, options = {}) {
       const subtitle = await analyzeImage(photo.localPath, {
         promptTemplate,
         quality,
-        model
+        model,
+        customExamplesPath,
+        useFewShot
       });
 
       results.set(photo.id, subtitle);
@@ -221,4 +241,254 @@ export async function analyzeImageBatch(photos, options = {}) {
  */
 export function isApiKeySet() {
   return !!API_KEY;
+}
+
+// ============================================================
+// v3.0: 이미지 특징 추출 기능 (2단계 분석 시스템)
+// ============================================================
+
+/**
+ * AI 응답에서 JSON 파싱
+ * @param {string} text - AI 응답 텍스트
+ * @returns {Object|Array|null} 파싱된 JSON 또는 null
+ */
+function parseJSONResponse(text) {
+  if (!text) return null;
+
+  // JSON 블록 추출 시도
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ||
+                   text.match(/```\s*([\s\S]*?)\s*```/) ||
+                   text.match(/(\[[\s\S]*\])/) ||
+                   text.match(/(\{[\s\S]*\})/);
+
+  const jsonStr = jsonMatch ? jsonMatch[1] : text;
+
+  try {
+    return JSON.parse(jsonStr.trim());
+  } catch {
+    // 재시도: 줄바꿈 및 특수문자 정리
+    try {
+      const cleaned = jsonStr
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/,\s*([}\]])/g, '$1')
+        .trim();
+      return JSON.parse(cleaned);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * 단일 이미지 특징 추출
+ * @param {string} imagePath - 이미지 파일 경로
+ * @param {Object} options - 옵션
+ * @param {string} options.model - Gemini 모델 이름
+ * @returns {Promise<Object>} 특징 추출 결과
+ */
+export async function extractImageFeatures(imagePath, options = {}) {
+  const { model: modelName } = options;
+
+  const model = getModel(modelName);
+  const { data, mimeType } = await imageToBase64(imagePath);
+
+  const result = await model.generateContent([
+    { inlineData: { mimeType, data } },
+    FEATURE_EXTRACTION_PROMPT
+  ]);
+
+  const response = result.response;
+  const text = response.text().trim();
+
+  const parsed = parseJSONResponse(text);
+
+  if (!parsed) {
+    throw new Error('JSON 파싱 실패');
+  }
+
+  return {
+    category: parsed.category || 'default',
+    mainSubject: parsed.mainSubject || '',
+    features: parsed.features || [],
+    confidence: parsed.confidence || 0.5,
+    reason: parsed.reason || ''
+  };
+}
+
+/**
+ * 배치 이미지 특징 추출 (여러 이미지 한 번에)
+ * @param {Array<{id: string, localPath: string}>} photos - 사진 배열
+ * @param {Object} options - 옵션
+ * @param {string} options.model - Gemini 모델 이름
+ * @param {number} options.delayMs - 요청 간 지연 시간 (ms)
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Promise<Map<string, Object>>} ID별 특징 추출 결과 맵
+ */
+export async function extractFeaturesBatch(photos, options = {}) {
+  const {
+    model: modelName,
+    delayMs = 1000,
+    onProgress
+  } = options;
+
+  const results = new Map();
+  const total = photos.length;
+
+  // 개별 처리 (배치 API 미지원 시)
+  for (let i = 0; i < total; i++) {
+    const photo = photos[i];
+
+    try {
+      if (onProgress) {
+        onProgress({ current: i + 1, total, photoId: photo.id, status: 'extracting' });
+      }
+
+      const features = await extractImageFeatures(photo.localPath, { model: modelName });
+      results.set(photo.id, features);
+
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total,
+          photoId: photo.id,
+          status: 'done',
+          category: features.category,
+          features: features.features
+        });
+      }
+
+      // rate limit 방지
+      if (i < total - 1 && delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    } catch (error) {
+      console.warn(`특징 추출 실패 (${photo.id}): ${error.message}`);
+      results.set(photo.id, null);
+
+      if (onProgress) {
+        onProgress({ current: i + 1, total, photoId: photo.id, status: 'error', error: error.message });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * 특징 기반 맞춤 자막 생성
+ * @param {string} imagePath - 이미지 파일 경로
+ * @param {Object} analysis - 특징 추출 결과
+ * @param {Object} options - 옵션
+ * @param {string} options.model - Gemini 모델 이름
+ * @returns {Promise<string>} 생성된 자막
+ */
+export async function generateSubtitleFromFeatures(imagePath, analysis, options = {}) {
+  const { model: modelName } = options;
+
+  const model = getModel(modelName);
+  const { data, mimeType } = await imageToBase64(imagePath);
+
+  // 특징 기반 맞춤 프롬프트 생성
+  const prompt = getFeatureBasedSubtitlePrompt(analysis);
+
+  const result = await model.generateContent([
+    { inlineData: { mimeType, data } },
+    prompt
+  ]);
+
+  const response = result.response;
+  const text = response.text().trim();
+
+  return cleanSubtitle(text);
+}
+
+/**
+ * 2단계 분석: 특징 추출 → 맞춤 자막 생성
+ * @param {string} imagePath - 이미지 파일 경로
+ * @param {Object} options - 옵션
+ * @param {string} options.model - Gemini 모델 이름
+ * @param {Object} options.preExtractedFeatures - 이미 추출된 특징 (있으면 재사용)
+ * @returns {Promise<{subtitle: string, analysis: Object}>} 자막과 분석 결과
+ */
+export async function analyzeImageTwoStep(imagePath, options = {}) {
+  const { model: modelName, preExtractedFeatures } = options;
+
+  // 1단계: 특징 추출 (이미 있으면 재사용)
+  let analysis = preExtractedFeatures;
+  if (!analysis) {
+    analysis = await extractImageFeatures(imagePath, { model: modelName });
+  }
+
+  // 2단계: 특징 기반 자막 생성
+  const subtitle = await generateSubtitleFromFeatures(imagePath, analysis, { model: modelName });
+
+  return {
+    subtitle,
+    analysis
+  };
+}
+
+/**
+ * 배치 2단계 분석
+ * @param {Array<{id: string, localPath: string}>} photos - 사진 배열
+ * @param {Object} options - 옵션
+ * @param {Map<string, Object>} options.preExtractedFeatures - 이미 추출된 특징 맵
+ * @param {string} options.model - Gemini 모델 이름
+ * @param {number} options.delayMs - 요청 간 지연 시간 (ms)
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Promise<Map<string, {subtitle: string, analysis: Object}>>} ID별 결과 맵
+ */
+export async function analyzeImageBatchTwoStep(photos, options = {}) {
+  const {
+    preExtractedFeatures = new Map(),
+    model: modelName,
+    delayMs = 1000,
+    onProgress
+  } = options;
+
+  const results = new Map();
+  const total = photos.length;
+
+  for (let i = 0; i < total; i++) {
+    const photo = photos[i];
+
+    try {
+      if (onProgress) {
+        onProgress({ current: i + 1, total, photoId: photo.id, status: 'analyzing' });
+      }
+
+      const preFeatures = preExtractedFeatures.get(photo.id);
+      const result = await analyzeImageTwoStep(photo.localPath, {
+        model: modelName,
+        preExtractedFeatures: preFeatures
+      });
+
+      results.set(photo.id, result);
+
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total,
+          photoId: photo.id,
+          status: 'done',
+          subtitle: result.subtitle,
+          category: result.analysis.category
+        });
+      }
+
+      // rate limit 방지
+      if (i < total - 1 && delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    } catch (error) {
+      console.warn(`2단계 분석 실패 (${photo.id}): ${error.message}`);
+      results.set(photo.id, { subtitle: null, analysis: null });
+
+      if (onProgress) {
+        onProgress({ current: i + 1, total, photoId: photo.id, status: 'error', error: error.message });
+      }
+    }
+  }
+
+  return results;
 }

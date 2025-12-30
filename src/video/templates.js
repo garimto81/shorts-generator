@@ -176,11 +176,16 @@ export function applyTemplate(config, templateName) {
 
 /**
  * Subtitle position configurations
+ *
+ * Safe Zone 적용 (TikTok/Reels/Shorts 호환):
+ * - top: 상단 240px (h/8) - UI 버튼 영역 피함
+ * - center: 중앙 - 가장 안전한 위치
+ * - bottom: 하단 320px 여백 (h-h/6) - 하단 UI 영역 피함
  */
 export const SUBTITLE_POSITIONS = {
-  top: 'h/10',
+  top: 'h/8',              // 240px (이전: 192px)
   center: '(h-text_h)/2',
-  bottom: 'h-h/10'
+  bottom: 'h-h/6'          // 1600px (이전: 1728px) - 320px 하단 여백
 };
 
 /**

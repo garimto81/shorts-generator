@@ -132,9 +132,13 @@ program
   .option('--prompt-template <type>', 'AI 프롬프트 템플릿 (default/product/food/wheelRestoration)', 'default')
   .option('--ai-quality <level>', 'AI 자막 품질 레벨 (creative/balanced/conservative)', 'balanced')
   .option('--ai-review', 'AI 자막 생성 후 수정 기회 제공')
+  .option('--examples-file <path>', 'Few-Shot 예시 파일 경로 (JSON)')
   .option('--reading-speed <speed>', '읽기 속도 (slow/normal/fast 또는 CPM 숫자)', 'normal')
+  .option('--auto-classify', '이미지 카테고리 자동 분류 (2단계 AI 분석)')
+  .option('--show-classification', '분류 결과 상세 출력')
   .option('--beat-sync <bpm>', 'BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자)')
   .option('--transition-mode <mode>', '전환 효과 모드 (single/sequential/random)', 'single')
+  .option('--subtitle-position <position>', '자막 위치 (top/center/bottom)', 'bottom')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .option('--filename-sort <mode>', '파일명 기반 정렬 (filename|none)', 'filename')
   .action(async (options) => {
@@ -386,12 +390,17 @@ program
             selectedPhotos = await generateSubtitles(selectedPhotos, {
               promptTemplate: options.promptTemplate || 'default',
               quality,
+              customExamplesPath: options.examplesFile || null,
               readingSpeed: options.readingSpeed || 'normal',
+              autoClassify: options.autoClassify || false,
+              twoStepAnalysis: options.autoClassify || false,
+              showClassification: options.showClassification || false,
               onProgress: (msg) => {
                 aiSpinner.text = `🤖 AI 자막 생성 중... ${msg}`;
               }
             });
-            aiSpinner.succeed(`AI 자막 생성 완료 (${qualityLabel})`);
+            const modeLabel = options.autoClassify ? '2단계 분석' : qualityLabel;
+            aiSpinner.succeed(`AI 자막 생성 완료 (${modeLabel})`);
 
             // 생성된 자막 미리보기
             console.log(chalk.dim('\n📝 생성된 자막:'));
@@ -530,6 +539,12 @@ program
       if (options.kenBurnsMode) {
         videoConfig.template = videoConfig.template || {};
         videoConfig.template.kenBurnsMode = options.kenBurnsMode;
+      }
+
+      // CLI 옵션으로 자막 위치 오버라이드
+      if (options.subtitlePosition) {
+        videoConfig.template = videoConfig.template || {};
+        videoConfig.template.subtitlePosition = options.subtitlePosition;
       }
 
       // 인트로/아웃트로 설정

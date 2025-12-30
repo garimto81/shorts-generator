@@ -220,3 +220,113 @@ export async function downloadImage(photo, destDir) {
  * PocketBase 클라이언트 인스턴스 내보내기 (확장 용도)
  */
 export { pb };
+
+// ============================================================
+// v3.0: AI 분류 캐싱 기능
+// ============================================================
+
+/**
+ * 사진 ID 배열로 AI 분류 캐시 조회
+ * @param {string[]} photoIds - 사진 ID 배열
+ * @returns {Promise<Array>} 캐시된 분류 정보가 있는 사진 배열
+ */
+export async function fetchPhotoCategories(photoIds) {
+  if (!photoIds || photoIds.length === 0) {
+    return [];
+  }
+
+  try {
+    // ID 필터 생성
+    const filter = photoIds.map(id => `id = "${id}"`).join(' || ');
+
+    let records;
+    try {
+      records = await pb.collection(COLLECTION).getList(1, photoIds.length, { filter });
+    } catch {
+      await authenticate();
+      records = await pb.collection(COLLECTION).getList(1, photoIds.length, { filter });
+    }
+
+    return records.items.map(item => ({
+      id: item.id,
+      aiCategory: item.aiCategory || null,
+      aiFeatures: item.aiFeatures || null,
+      aiMainSubject: item.aiMainSubject || null,
+      aiCategoryConfidence: item.aiCategoryConfidence || null,
+      aiCategorySource: item.aiCategorySource || null
+    }));
+  } catch (error) {
+    console.warn('AI 분류 캐시 조회 실패:', error.message);
+    return [];
+  }
+}
+
+/**
+ * 단일 사진의 AI 분류 결과 업데이트
+ * @param {string} photoId - 사진 ID
+ * @param {Object} data - 분류 데이터
+ * @param {string} data.aiCategory - 카테고리
+ * @param {string[]} data.aiFeatures - 특징 배열
+ * @param {string} data.aiMainSubject - 주요 피사체
+ * @param {number} data.aiCategoryConfidence - 신뢰도
+ * @param {string} data.aiCategorySource - 분류 출처
+ * @returns {Promise<boolean>} 성공 여부
+ */
+export async function updatePhotoCategory(photoId, data) {
+  if (!photoId || !data) return false;
+
+  try {
+    const updateData = {
+      aiCategory: data.aiCategory || null,
+      aiFeatures: data.aiFeatures || null,
+      aiMainSubject: data.aiMainSubject || null,
+      aiCategoryConfidence: data.aiCategoryConfidence || null,
+      aiCategorySource: data.aiCategorySource || null
+    };
+
+    try {
+      await pb.collection(COLLECTION).update(photoId, updateData);
+    } catch {
+      await authenticate();
+      await pb.collection(COLLECTION).update(photoId, updateData);
+    }
+
+    return true;
+  } catch (error) {
+    console.warn(`AI 분류 캐시 저장 실패 (${photoId}):`, error.message);
+    return false;
+  }
+}
+
+/**
+ * 여러 사진의 AI 분류 결과 일괄 업데이트
+ * @param {Array<{id: string, aiCategory: string, aiFeatures?: string[], aiMainSubject?: string, aiCategoryConfidence?: number, aiCategorySource?: string}>} updates - 업데이트 배열
+ * @returns {Promise<{success: number, failed: number}>} 결과 통계
+ */
+export async function updatePhotoCategories(updates) {
+  if (!updates || updates.length === 0) {
+    return { success: 0, failed: 0 };
+  }
+
+  let success = 0;
+  let failed = 0;
+
+  // PocketBase는 배치 업데이트 미지원, 개별 처리
+  for (const update of updates) {
+    const result = await updatePhotoCategory(update.id, {
+      aiCategory: update.aiCategory,
+      aiFeatures: update.aiFeatures,
+      aiMainSubject: update.aiMainSubject,
+      aiCategoryConfidence: update.aiCategoryConfidence,
+      aiCategorySource: update.aiCategorySource
+    });
+
+    if (result) {
+      success++;
+    } else {
+      failed++;
+    }
+  }
+
+  return { success, failed };
+}
