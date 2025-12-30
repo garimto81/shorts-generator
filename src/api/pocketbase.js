@@ -50,9 +50,10 @@ async function authenticate() {
  * @returns {string} PocketBase 정렬 문자열
  */
 function parseSortOption(sort) {
+  // PocketHost에서 created 필드 정렬 불가 → id 기반 정렬 사용
   const sortMap = {
-    'newest': '-created',
-    'oldest': '+created',
+    'newest': '-id',
+    'oldest': '+id',
     'title': '+title',
     'title-desc': '-title'
   };
