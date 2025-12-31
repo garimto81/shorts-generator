@@ -34,10 +34,10 @@ export const PHASE_KEYWORDS = {
  * @returns {string|null} Phase 힌트 또는 null
  */
 export function extractPhaseFromMetadata(photo) {
+  // groupTitle 제외: 그룹 제목의 일반 키워드가 모든 사진에 영향을 미치는 것 방지
   const searchText = [
     photo.title || '',
-    photo.image || '',
-    photo.groupTitle || ''
+    photo.image || ''
   ].join(' ').toLowerCase();
 
   if (!searchText.trim()) return null;
