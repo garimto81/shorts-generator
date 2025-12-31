@@ -10,6 +10,7 @@ import { generateThumbnail, generateBestThumbnail, TEXT_OVERLAY_STYLES } from '.
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
 import { generateSubtitles, checkAvailability, PROMPT_TYPES, QUALITY_LEVELS } from './ai/subtitle-generator.js';
+import { classifyPhases, sortByPhase, formatPhaseResults } from './ai/phase-sorter.js';
 import { READING_SPEED_PRESETS } from './video/duration-calculator.js';
 import { applyBeatSync, getBeatSyncSummary, BPM_PRESETS, BPM_PRESET_NAMES } from './audio/beat-sync.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
@@ -141,6 +142,8 @@ program
   .option('--subtitle-position <position>', '자막 위치 (top/center/bottom)', 'bottom')
   .option('--sort <order>', '정렬 기준 (newest|oldest|title)', 'newest')
   .option('--filename-sort <mode>', '파일명 기반 정렬 (filename|none)', 'filename')
+  .option('--ai-sort', 'AI 작업 단계 기반 자동 정렬 (GOOGLE_API_KEY 필요)')
+  .option('--show-phase', 'Phase 분류 결과 상세 출력')
   .action(async (options) => {
     try {
       let selectedPhotos;
@@ -363,6 +366,42 @@ program
         downloadSpinner.text = `이미지 다운로드 중... (${i + 1}/${selectedPhotos.length})`;
       }
       downloadSpinner.succeed('이미지 다운로드 완료');
+
+      // AI 기반 Phase 정렬 (--ai-sort 옵션)
+      if (options.aiSort) {
+        const aiCheck = checkAvailability();
+        if (!aiCheck.available) {
+          console.log(chalk.yellow(`\n⚠️  AI 정렬 사용 불가: ${aiCheck.reason}`));
+          console.log(chalk.dim('환경변수 설정: set GOOGLE_API_KEY=your-api-key'));
+        } else {
+          const phaseSpinner = ora('AI 작업 단계 분류 중...').start();
+          try {
+            // Phase 분류
+            const phaseMap = await classifyPhases(selectedPhotos, {
+              useMetadataHint: true,
+              delayMs: 1000,
+              onProgress: (progress) => {
+                if (progress.message) {
+                  phaseSpinner.text = progress.message;
+                }
+              }
+            });
+
+            // Phase 기반 재정렬
+            selectedPhotos = sortByPhase(selectedPhotos, phaseMap);
+
+            phaseSpinner.succeed(`AI 정렬 완료 (${phaseMap.size}장 분류)`);
+
+            // Phase 분류 결과 상세 출력 (--show-phase 옵션)
+            if (options.showPhase) {
+              console.log(formatPhaseResults(selectedPhotos, phaseMap));
+            }
+          } catch (error) {
+            phaseSpinner.fail(`AI 정렬 실패: ${error.message}`);
+            console.log(chalk.yellow('기존 파일명 순서로 진행합니다.'));
+          }
+        }
+      }
 
       // AI 자막 생성 (옵션 활성화 시)
       if (options.aiSubtitle) {

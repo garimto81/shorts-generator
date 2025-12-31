@@ -439,3 +439,51 @@ export function getFeatureBasedSubtitlePrompt(analysis) {
 - "실버 도색 복원, 새것같은 벤츠 휠"
 - "다이아몬드 컷팅의 완벽한 마무리"`;
 }
+
+// ============================================================
+// v3.1: 이미지 Phase 분류 프롬프트 (AI 정렬용)
+// ============================================================
+
+/**
+ * 휠 복원 작업 Phase 정의
+ * 영상 생성 시 이미지 순서를 결정하는 기준
+ */
+export const WHEEL_RESTORATION_PHASES = {
+  overview: { order: 1, name: '차량 전체', description: '전면/후면 전체 모습' },
+  before: { order: 2, name: '복원 전', description: '거친 휠, 손상된 상태' },
+  process: { order: 3, name: '작업 중', description: '세척, 도색, 가공 과정' },
+  after: { order: 4, name: '복원 후', description: '깨끗한 광택, 완료 상태' }
+};
+
+/**
+ * Phase 분류 프롬프트
+ * 휠 복원 작업의 논리적 순서에 맞게 이미지를 분류
+ */
+export const PHASE_EXTRACTION_PROMPT = `이 휠/자동차 이미지의 작업 단계(phase)를 분류해주세요.
+
+단계 정의:
+- overview: 차량 전체 모습 (전면/후면, 멀리서 촬영, 차량 전체가 보임)
+- before: 복원 전 휠 상태 (거친 표면, 스크래치, 손상, 부식, 먼지)
+- process: 작업 중 (세척, 도색, 마스킹, 가공, 연마, 코팅 작업)
+- after: 복원 후 (광택, 깨끗함, 완료 상태, 새것같은 모습)
+
+판단 기준:
+1. 차량 전체가 보이면 → overview
+2. 휠이 손상/거친 상태면 → before
+3. 작업 도구/마스킹이 보이거나 작업 중이면 → process
+4. 휠이 깨끗하고 광택이 나면 → after
+
+출력 형식 (JSON만, 다른 텍스트 없이):
+{
+  "phase": "before",
+  "phaseConfidence": 0.9,
+  "phaseReason": "휠 표면에 스크래치와 손상이 보임"
+}`;
+
+/**
+ * Phase 분류 프롬프트 가져오기
+ * @returns {string} Phase 분류 프롬프트
+ */
+export function getPhasePrompt() {
+  return PHASE_EXTRACTION_PROMPT;
+}

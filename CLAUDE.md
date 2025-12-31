@@ -42,6 +42,7 @@ node src/index.js list -n 10 --group <id>         # 그룹별 사진 조회
 node src/index.js create --group <id> --auto -n 50  # 그룹 전체 사진으로 영상 생성
 node src/index.js create --ids abc123,def456 --transition fade
 node src/index.js create --auto --ai-subtitle     # AI 자막 자동 생성
+node src/index.js create --auto --ai-sort         # AI 정렬 자동 적용
 
 # PocketBase 초기 설정 (photos, photo_groups 컬렉션)
 node scripts/setup-pocketbase.js
@@ -71,6 +72,8 @@ node scripts/setup-pocketbase.js
 | `create` | `--reading-speed <speed>` | 읽기 속도 (slow/normal/fast 또는 CPM 숫자) |
 | `create` | `--beat-sync <bpm>` | BGM 비트 동기화 (slow/medium/upbeat/fast 또는 BPM 숫자) |
 | `create` | `--transition-mode <mode>` | 전환 효과 모드 (single/sequential/random) |
+| `create` | `--ai-sort` | AI 작업 단계 기반 자동 정렬 (GOOGLE_API_KEY 필요) |
+| `create` | `--show-phase` | Phase 분류 결과 상세 출력 |
 | `thumbnail` | `-p, --position <pos>` | 썸네일 추출 위치 (start/middle/end 또는 초) |
 | `templates` | `-d, --detail` | 템플릿 상세 정보 표시 |
 
@@ -117,6 +120,7 @@ photos 컬렉션   배열 반환     temp/{id}.jpg    FFmpeg filter_complex
 | `src/ai/subtitle-generator.js` | AI 자막 생성 통합 (이미지 분석 → 자막 → 재생 시간) |
 | `src/ai/vision.js` | Google Gemini Vision API 연동 (`analyzeImageBatch`) |
 | `src/ai/prompt-templates.js` | AI 프롬프트 템플릿 (default, product, food, wheelRestoration) |
+| `src/ai/phase-sorter.js` | AI 이미지 정렬 (작업 단계 기반: overview → before → process → after) |
 | `src/audio/beat-sync.js` | BPM 기반 비트 동기화 (전환 타이밍 계산) |
 
 ### FFmpeg 파이프라인 (generator.js)

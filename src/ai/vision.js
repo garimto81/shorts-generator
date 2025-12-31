@@ -14,7 +14,9 @@ import {
   getPromptWithExamples,
   FEATURE_EXTRACTION_PROMPT,
   BATCH_FEATURE_EXTRACTION_PROMPT,
-  getFeatureBasedSubtitlePrompt
+  getFeatureBasedSubtitlePrompt,
+  PHASE_EXTRACTION_PROMPT,
+  WHEEL_RESTORATION_PHASES
 } from './prompt-templates.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -486,6 +488,128 @@ export async function analyzeImageBatchTwoStep(photos, options = {}) {
 
       if (onProgress) {
         onProgress({ current: i + 1, total, photoId: photo.id, status: 'error', error: error.message });
+      }
+    }
+  }
+
+  return results;
+}
+
+// ============================================================
+// v3.1: 이미지 Phase 분류 기능 (AI 정렬용)
+// ============================================================
+
+/**
+ * 단일 이미지 Phase 추출
+ * @param {string} imagePath - 이미지 파일 경로
+ * @param {Object} options - 옵션
+ * @param {string} options.model - Gemini 모델 이름
+ * @returns {Promise<Object>} Phase 분류 결과
+ */
+export async function extractPhaseFeatures(imagePath, options = {}) {
+  const { model: modelName } = options;
+
+  const model = getModel(modelName);
+  const { data, mimeType } = await imageToBase64(imagePath);
+
+  const result = await model.generateContent([
+    { inlineData: { mimeType, data } },
+    PHASE_EXTRACTION_PROMPT
+  ]);
+
+  const response = result.response;
+  const text = response.text().trim();
+
+  const parsed = parseJSONResponse(text);
+
+  if (!parsed) {
+    // 파싱 실패 시 기본값 반환
+    return {
+      phase: 'after',  // 기본값: 복원 후 (가장 일반적인 결과물)
+      phaseConfidence: 0.5,
+      phaseReason: 'JSON 파싱 실패, 기본값 사용'
+    };
+  }
+
+  // phase 값 검증
+  const validPhases = Object.keys(WHEEL_RESTORATION_PHASES);
+  const phase = validPhases.includes(parsed.phase) ? parsed.phase : 'after';
+
+  return {
+    phase,
+    phaseConfidence: parsed.phaseConfidence || 0.5,
+    phaseReason: parsed.phaseReason || ''
+  };
+}
+
+/**
+ * 배치 이미지 Phase 추출
+ * @param {Array<{id: string, localPath: string}>} photos - 사진 배열
+ * @param {Object} options - 옵션
+ * @param {string} options.model - Gemini 모델 이름
+ * @param {number} options.delayMs - 요청 간 지연 시간 (ms)
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Promise<Map<string, Object>>} ID별 Phase 결과 맵
+ */
+export async function extractPhaseBatch(photos, options = {}) {
+  const {
+    model: modelName,
+    delayMs = 1000,
+    onProgress
+  } = options;
+
+  const results = new Map();
+  const total = photos.length;
+
+  for (let i = 0; i < total; i++) {
+    const photo = photos[i];
+
+    try {
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total,
+          photoId: photo.id,
+          status: 'classifying',
+          message: `Phase 분류 중 (${i + 1}/${total})`
+        });
+      }
+
+      const phaseResult = await extractPhaseFeatures(photo.localPath, { model: modelName });
+      results.set(photo.id, phaseResult);
+
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total,
+          photoId: photo.id,
+          status: 'done',
+          phase: phaseResult.phase,
+          confidence: phaseResult.phaseConfidence
+        });
+      }
+
+      // rate limit 방지
+      if (i < total - 1 && delayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    } catch (error) {
+      console.warn(`Phase 분류 실패 (${photo.id}): ${error.message}`);
+      // 실패 시 기본값 사용
+      results.set(photo.id, {
+        phase: 'after',
+        phaseConfidence: 0.3,
+        phaseReason: `분류 실패: ${error.message}`
+      });
+
+      if (onProgress) {
+        onProgress({
+          current: i + 1,
+          total,
+          photoId: photo.id,
+          status: 'error',
+          error: error.message
+        });
       }
     }
   }

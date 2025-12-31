@@ -173,6 +173,7 @@ AI 이미지 분석 → 마케팅 문구 자동 생성 → 자막 오버레이
 | 자막 스타일 | 폰트, 크기, 색상 | ✅ |
 | 한글 폰트 | NotoSansKR-Bold | ✅ |
 | 동적 재생 시간 | 읽기 속도 기반 | ✅ |
+| AI 이미지 정렬 | 작업 단계 기반 순서 정렬 | ✅ |
 
 ### 5.3 CLI
 
@@ -185,6 +186,12 @@ node src/index.js create --auto --ai-subtitle --prompt-template wheelRestoration
 
 # 읽기 속도 조정
 node src/index.js create --auto --ai-subtitle --reading-speed slow
+
+# AI 정렬 활성화
+node src/index.js create --auto --ai-sort
+
+# AI 정렬 + 결과 확인
+node src/index.js create --auto --ai-sort --show-phase
 ```
 
 ### 5.4 프롬프트 템플릿
@@ -214,6 +221,24 @@ node src/index.js create --auto --ai-subtitle --reading-speed slow
   }
 }
 ```
+
+### 5.6 AI 이미지 정렬
+
+휠 복원 작업 흐름에 맞게 이미지 순서 자동 정렬
+
+| Phase | 설명 | 순서 |
+|-------|------|------|
+| overview | 차량 전체 모습 | 1 |
+| before | 복원 전 휠 상태 | 2 |
+| process | 작업 중 | 3 |
+| after | 복원 후 상태 | 4 |
+
+**처리 흐름**:
+1. 파일명 기반 기본 정렬
+2. AI가 각 이미지의 작업 단계(phase) 분류
+3. Phase 순서대로 자동 재정렬
+
+**관련 파일**: `src/ai/phase-sorter.js`
 
 ---
 
@@ -262,7 +287,8 @@ src/
 ├── ai/
 │   ├── vision.js         # Gemini Vision API
 │   ├── subtitle-generator.js  # 자막 통합
-│   └── prompt-templates.js    # 프롬프트 템플릿
+│   ├── prompt-templates.js    # 프롬프트 템플릿
+│   └── phase-sorter.js   # AI 이미지 정렬
 ├── video/
 │   ├── generator.js      # FFmpeg filter_complex
 │   ├── subtitle.js       # 자막 처리
