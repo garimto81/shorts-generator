@@ -5,62 +5,107 @@ import { spawn } from 'child_process';
 import { formatSubtitle, SUBTITLE_STYLE } from './subtitle.js';
 import { SUBTITLE_POSITIONS, SUBTITLE_STYLES } from './templates.js';
 import { generateIntroFilter, generateOutroFilter, INTRO_OUTRO_PRESETS, INTRO_OUTRO_PRESET_NAMES } from './intro-outro.js';
+import { SUBTITLE_ANIMATIONS, getFadeInAlpha } from './subtitle-animation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Ken Burns 패턴 정의
+ * Ease-in-out cubic 이징 함수 (FFmpeg 표현식)
+ * t = 정규화된 시간 (0~1)
+ * 출력: ease-in-out으로 변환된 0~1 값
+ * 수식: t < 0.5 ? 4*t^3 : 1 - pow(-2*t + 2, 3) / 2
+ */
+function easeInOutCubic(timeExpr) {
+  // FFmpeg 표현식으로 ease-in-out cubic 구현
+  return `if(lt(${timeExpr},0.5),4*pow(${timeExpr},3),1-pow(-2*${timeExpr}+2,3)/2)`;
+}
+
+/**
+ * Ken Burns 패턴 정의 (Ease-in-out 이징 적용)
  * 각 패턴은 zoompan 필터의 z(줌), x(수평 위치), y(수직 위치) 표현식을 생성
+ * 이징 곡선으로 자연스러운 가속/감속 효과 적용
  */
 const KEN_BURNS_PATTERNS = {
-  // 기본 줌 인 (중앙)
-  zoomInCenter: (duration, fps, intensity) => ({
-    z: `1.0+(${intensity})*on/(${duration}*${fps})`,
-    x: 'iw/2-(iw/zoom/2)',
-    y: 'ih/2-(ih/zoom/2)'
-  }),
-  // 기본 줌 아웃 (중앙)
-  zoomOutCenter: (duration, fps, intensity) => ({
-    z: `(1.0+${intensity})-(${intensity})*on/(${duration}*${fps})`,
-    x: 'iw/2-(iw/zoom/2)',
-    y: 'ih/2-(ih/zoom/2)'
-  }),
-  // 좌상단에서 우하단으로 패닝 + 줌 인
-  panLeftTopToRightBottom: (duration, fps, intensity) => ({
-    z: `1.0+(${intensity})*on/(${duration}*${fps})`,
-    x: `(iw*0.1)+(iw*0.3)*on/(${duration}*${fps})`,
-    y: `(ih*0.1)+(ih*0.3)*on/(${duration}*${fps})`
-  }),
-  // 우상단에서 좌하단으로 패닝 + 줌 인
-  panRightTopToLeftBottom: (duration, fps, intensity) => ({
-    z: `1.0+(${intensity})*on/(${duration}*${fps})`,
-    x: `(iw*0.4)-(iw*0.3)*on/(${duration}*${fps})`,
-    y: `(ih*0.1)+(ih*0.3)*on/(${duration}*${fps})`
-  }),
-  // 좌우 패닝 (줌 고정)
-  panLeftToRight: (duration, fps, intensity) => ({
-    z: `1.0+${intensity * 0.5}`,
-    x: `(iw*0.1)+(iw*0.3)*on/(${duration}*${fps})`,
-    y: 'ih/2-(ih/zoom/2)'
-  }),
-  // 우좌 패닝 (줌 고정)
-  panRightToLeft: (duration, fps, intensity) => ({
-    z: `1.0+${intensity * 0.5}`,
-    x: `(iw*0.4)-(iw*0.3)*on/(${duration}*${fps})`,
-    y: 'ih/2-(ih/zoom/2)'
-  }),
-  // 상하 패닝 + 줌 아웃
-  panTopToBottom: (duration, fps, intensity) => ({
-    z: `(1.0+${intensity})-(${intensity * 0.5})*on/(${duration}*${fps})`,
-    x: 'iw/2-(iw/zoom/2)',
-    y: `(ih*0.15)+(ih*0.2)*on/(${duration}*${fps})`
-  }),
-  // 하상 패닝 + 줌 인
-  panBottomToTop: (duration, fps, intensity) => ({
-    z: `1.0+(${intensity * 0.5})*on/(${duration}*${fps})`,
-    x: 'iw/2-(iw/zoom/2)',
-    y: `(ih*0.35)-(ih*0.2)*on/(${duration}*${fps})`
-  })
+  // 기본 줌 인 (중앙) - ease-in-out 적용
+  zoomInCenter: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;  // 정규화된 시간 (0~1)
+    const eased = easeInOutCubic(t);
+    return {
+      z: `1.0+(${intensity})*(${eased})`,
+      x: 'iw/2-(iw/zoom/2)',
+      y: 'ih/2-(ih/zoom/2)'
+    };
+  },
+  // 기본 줌 아웃 (중앙) - ease-in-out 적용
+  zoomOutCenter: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `(1.0+${intensity})-(${intensity})*(${eased})`,
+      x: 'iw/2-(iw/zoom/2)',
+      y: 'ih/2-(ih/zoom/2)'
+    };
+  },
+  // 좌상단에서 우하단으로 패닝 + 줌 인 - ease-in-out 적용
+  panLeftTopToRightBottom: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `1.0+(${intensity})*(${eased})`,
+      x: `(iw*0.1)+(iw*0.3)*(${eased})`,
+      y: `(ih*0.1)+(ih*0.3)*(${eased})`
+    };
+  },
+  // 우상단에서 좌하단으로 패닝 + 줌 인 - ease-in-out 적용
+  panRightTopToLeftBottom: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `1.0+(${intensity})*(${eased})`,
+      x: `(iw*0.4)-(iw*0.3)*(${eased})`,
+      y: `(ih*0.1)+(ih*0.3)*(${eased})`
+    };
+  },
+  // 좌우 패닝 (줌 고정) - ease-in-out 적용
+  panLeftToRight: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `1.0+${intensity * 0.5}`,
+      x: `(iw*0.1)+(iw*0.3)*(${eased})`,
+      y: 'ih/2-(ih/zoom/2)'
+    };
+  },
+  // 우좌 패닝 (줌 고정) - ease-in-out 적용
+  panRightToLeft: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `1.0+${intensity * 0.5}`,
+      x: `(iw*0.4)-(iw*0.3)*(${eased})`,
+      y: 'ih/2-(ih/zoom/2)'
+    };
+  },
+  // 상하 패닝 + 줌 아웃 - ease-in-out 적용
+  panTopToBottom: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `(1.0+${intensity})-(${intensity * 0.5})*(${eased})`,
+      x: 'iw/2-(iw/zoom/2)',
+      y: `(ih*0.15)+(ih*0.2)*(${eased})`
+    };
+  },
+  // 하상 패닝 + 줌 인 - ease-in-out 적용
+  panBottomToTop: (duration, fps, intensity) => {
+    const t = `on/(${duration}*${fps})`;
+    const eased = easeInOutCubic(t);
+    return {
+      z: `1.0+(${intensity * 0.5})*(${eased})`,
+      x: 'iw/2-(iw/zoom/2)',
+      y: `(ih*0.35)-(ih*0.2)*(${eased})`
+    };
+  }
 };
 
 /**
@@ -318,17 +363,17 @@ export async function generateVideo(photos, options = {}) {
       // Ken Burns: 다양한 패턴 적용 (zoom + pan 조합)
       const effect = getKenBurnsEffect(i, photoDuration, fps, zoomIntensity, kenBurnsMode);
 
-      // Scale with Ken Burns (zoompan)
+      // Scale with Ken Burns (zoompan) - lanczos 고품질 스케일러 사용
       filters.push(
-        `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase,` +
+        `[${i}:v]scale=${width * 2}:${height * 2}:force_original_aspect_ratio=increase:flags=lanczos,` +
         `crop=${width * 2}:${height * 2},` +
         `zoompan=z='${effect.z}':x='${effect.x}':y='${effect.y}':d=${photoDuration * fps}:s=${width}x${height}:fps=${fps},` +
         `setsar=1[v${i}]`
       );
     } else {
-      // No Ken Burns - simple scale and duration
+      // No Ken Burns - simple scale and duration - lanczos 고품질 스케일러 사용
       filters.push(
-        `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
+        `[${i}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,` +
         `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
         `loop=loop=${photoDuration * fps}:size=1:start=0,` +
         `setpts=PTS-STARTPTS,fps=${fps},setsar=1[v${i}]`
@@ -382,6 +427,12 @@ export async function generateVideo(photos, options = {}) {
         const shadowColor = subtitleStyle.shadowColor || '0x00000080';
         drawtextParams += `:shadowx=${shadowX}:shadowy=${shadowY}:shadowcolor=${shadowColor}`;
       }
+
+      // 자막 페이드인 애니메이션 추가 (0.4초)
+      // 각 클립 내에서 t=0부터 시작하므로 clipStartTime=0
+      const fadeInDuration = 0.4;
+      const fadeInAlpha = `if(lt(t,${fadeInDuration}),t/${fadeInDuration},1)`;
+      drawtextParams += `:alpha='${fadeInAlpha}'`;
 
       filters.push(`[v${i}]drawtext=${drawtextParams}[vt${i}]`);
     } else {
@@ -488,23 +539,35 @@ export async function generateVideo(photos, options = {}) {
     '-map', '[vout]'
   ];
 
-  // Audio handling
+  // Audio handling (High Quality)
   if (bgmEnabled) {
     const audioIdx = logoEnabled ? photoCount + 1 : photoCount;
     args.push('-map', `${audioIdx}:a`);
-    // 오디오 페이드인 적용 (시작 잡음 제거)
-    args.push('-af', 'afade=t=in:st=0:d=0.5');
-    args.push('-c:a', 'aac', '-b:a', '128k', '-shortest');
+    // 오디오 필터: 페이드인 + 볼륨 정규화
+    args.push('-af', 'afade=t=in:st=0:d=0.5,loudnorm=I=-16:TP=-1.5:LRA=11');
+    args.push(
+      '-c:a', 'aac',
+      '-b:a', '256k',            // 128k -> 256k (고품질)
+      '-ar', '48000',            // 48kHz 샘플레이트
+      '-ac', '2',                // 스테레오
+      '-shortest'
+    );
   } else {
     args.push('-an');
   }
 
-  // Video encoding
+  // Video encoding (High Quality)
   args.push(
     '-c:v', 'libx264',
-    '-preset', 'fast',
-    '-crf', '23',
+    '-preset', 'slow',           // 최고 압축 효율
+    '-crf', '18',                // 고품질 (18-23 범위, 낮을수록 고품질)
+    '-profile:v', 'high',        // H.264 High Profile
+    '-level', '4.2',             // Level 4.2 (1080p@60fps 지원)
     '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',   // 웹 스트리밍 최적화 (moov atom을 앞으로)
+    '-b:v', '8M',                // 8Mbps 비트레이트
+    '-maxrate', '10M',           // 최대 비트레이트
+    '-bufsize', '16M',           // 버퍼 크기
     outputPath
   );
 
@@ -540,16 +603,22 @@ export async function generateVideoSimple(photos, options = {}) {
     '-f', 'concat',
     '-safe', '0',
     '-i', listFile,
-    '-vf', `fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,loop=loop=${duration * fps}:size=1:start=0`,
+    '-vf', `fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,loop=loop=${duration * fps}:size=1:start=0`,
     '-c:v', 'libx264',
-    '-preset', 'fast',
-    '-crf', '23',
-    '-pix_fmt', 'yuv420p'
+    '-preset', 'slow',           // 고품질
+    '-crf', '18',                // 고품질
+    '-profile:v', 'high',
+    '-level', '4.2',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    '-b:v', '8M',
+    '-maxrate', '10M',
+    '-bufsize', '16M'
   ];
 
   if (bgmPath && existsSync(bgmPath)) {
     args.push('-i', bgmPath);
-    args.push('-c:a', 'aac', '-b:a', '128k', '-shortest');
+    args.push('-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-shortest');
   } else {
     args.push('-an');
   }

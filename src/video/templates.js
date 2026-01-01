@@ -113,6 +113,28 @@ export const TEMPLATES = {
     kenBurnsMode: 'sequential',  // 천천히 순환하며 시네마틱 효과
     subtitlePosition: 'bottom',
     subtitleStyle: 'cinematic'
+  },
+
+  // 최고 품질 - 렌더링 시간보다 품질 우선
+  ultraQuality: {
+    name: '울트라 퀄리티',
+    description: '최고 품질 설정 (렌더링 시간 증가)',
+    photoDuration: 4,
+    transition: 'fade',
+    transitionDuration: 1.2,
+    kenBurns: true,
+    zoomIntensity: 0.1,              // 부드러운 움직임
+    kenBurnsMode: 'sequential',
+    subtitlePosition: 'bottom',
+    subtitleStyle: 'boxedShadow',    // 가장 가독성 높은 스타일
+    // Ultra Quality 전용 인코딩 설정 (generator.js에서 사용)
+    encoding: {
+      preset: 'veryslow',            // 최고 압축 효율
+      crf: 16,                       // 최고 품질
+      bitrate: '12M',                // 높은 비트레이트
+      maxrate: '15M',
+      bufsize: '24M'
+    }
   }
 };
 
