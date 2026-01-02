@@ -13,10 +13,15 @@ import { WHEEL_RESTORATION_PHASES } from './prompt-templates.js';
 
 /**
  * @typedef {Object} PhaseResult
- * @property {string} phase - 작업 단계 (overview|before|process|after)
+ * @property {string} phase - 작업 단계 (overview|before|process|after|unknown)
  * @property {number} phaseConfidence - 분류 신뢰도 (0.0-1.0)
  * @property {string} phaseReason - 분류 근거
  */
+
+/**
+ * 신뢰도 임계값 (이 값 미만이면 원본 순서 유지)
+ */
+export const PHASE_CONFIDENCE_THRESHOLD = 0.6;
 
 /**
  * Phase 분류 키워드 (메타데이터 힌트용)
@@ -135,25 +140,50 @@ export async function classifyPhases(photos, options = {}) {
 
 /**
  * Phase 기반 사진 정렬
- * - Phase order 순서로 정렬
+ * - 신뢰도 >= 임계값: Phase order 순서로 정렬
+ * - 신뢰도 < 임계값 또는 unknown: 원본 순서 유지 (뒤쪽 배치)
  * - 동일 Phase 내에서는 기존 순서 유지 (stable sort)
  *
  * @param {Array} photos - 사진 배열 (이미 파일명 정렬됨)
  * @param {Map<string, PhaseResult>} phaseMap - Phase 분류 결과 맵
+ * @param {Object} options - 옵션
+ * @param {number} options.confidenceThreshold - 신뢰도 임계값 (기본 0.6)
  * @returns {Array} Phase 순서로 정렬된 사진 배열
  */
-export function sortByPhase(photos, phaseMap) {
-  // 원본 인덱스 저장 (stable sort를 위해)
-  const photosWithIndex = photos.map((photo, index) => ({
-    photo,
-    originalIndex: index,
-    phase: phaseMap.get(photo.id) || { phase: 'after', phaseConfidence: 0.3 }
-  }));
+export function sortByPhase(photos, phaseMap, options = {}) {
+  const { confidenceThreshold = PHASE_CONFIDENCE_THRESHOLD } = options;
 
-  // Phase order로 정렬 (동일 phase는 원본 순서 유지)
+  // 원본 인덱스 저장 (stable sort를 위해)
+  const photosWithIndex = photos.map((photo, index) => {
+    const result = phaseMap.get(photo.id);
+
+    // 신뢰도 기반 필터링
+    const isLowConfidence = !result ||
+                            result.phase === 'unknown' ||
+                            result.phaseConfidence < confidenceThreshold;
+
+    return {
+      photo,
+      originalIndex: index,
+      phase: result || { phase: 'unknown', phaseConfidence: 0 },
+      useOriginalOrder: isLowConfidence  // 원본 순서 사용 플래그
+    };
+  });
+
+  // Phase order로 정렬 (신뢰도 기반 필터링 적용)
   photosWithIndex.sort((a, b) => {
-    const orderA = WHEEL_RESTORATION_PHASES[a.phase.phase]?.order || 4;
-    const orderB = WHEEL_RESTORATION_PHASES[b.phase.phase]?.order || 4;
+    // 둘 다 원본 순서 사용이면 원본 순서 유지
+    if (a.useOriginalOrder && b.useOriginalOrder) {
+      return a.originalIndex - b.originalIndex;
+    }
+
+    // 하나만 원본 순서면 AI 분류 결과 우선 (저신뢰도는 뒤로)
+    if (a.useOriginalOrder) return 1;  // a를 뒤로
+    if (b.useOriginalOrder) return -1; // b를 뒤로
+
+    // 둘 다 AI 분류된 경우 Phase order로 정렬
+    const orderA = WHEEL_RESTORATION_PHASES[a.phase.phase]?.order || 99;
+    const orderB = WHEEL_RESTORATION_PHASES[b.phase.phase]?.order || 99;
 
     if (orderA !== orderB) {
       return orderA - orderB;
@@ -169,28 +199,48 @@ export function sortByPhase(photos, phaseMap) {
 /**
  * Phase 분류 통계 생성
  * @param {Map<string, PhaseResult>} phaseMap - Phase 분류 결과 맵
+ * @param {Object} options - 옵션
+ * @param {number} options.confidenceThreshold - 신뢰도 임계값 (기본 0.6)
  * @returns {Object} 통계 객체
  */
-export function getPhaseStats(phaseMap) {
+export function getPhaseStats(phaseMap, options = {}) {
+  const { confidenceThreshold = PHASE_CONFIDENCE_THRESHOLD } = options;
+
   const stats = {
     total: phaseMap.size,
     byPhase: {
       overview: 0,
       before: 0,
       process: 0,
-      after: 0
+      after: 0,
+      unknown: 0
     },
-    avgConfidence: 0
+    avgConfidence: 0,
+    highConfidenceCount: 0,  // 신뢰도 >= 임계값
+    lowConfidenceCount: 0    // 신뢰도 < 임계값 또는 unknown
   };
 
   let totalConfidence = 0;
 
   for (const result of phaseMap.values()) {
     const phase = result.phase;
+    const confidence = result.phaseConfidence || 0;
+
+    // Phase별 카운트
     if (stats.byPhase.hasOwnProperty(phase)) {
       stats.byPhase[phase]++;
+    } else {
+      stats.byPhase.unknown++;
     }
-    totalConfidence += result.phaseConfidence || 0;
+
+    totalConfidence += confidence;
+
+    // 신뢰도 분류
+    if (phase !== 'unknown' && confidence >= confidenceThreshold) {
+      stats.highConfidenceCount++;
+    } else {
+      stats.lowConfidenceCount++;
+    }
   }
 
   stats.avgConfidence = stats.total > 0
@@ -204,25 +254,46 @@ export function getPhaseStats(phaseMap) {
  * Phase 분류 결과 포맷팅 (CLI 출력용)
  * @param {Array} photos - 정렬된 사진 배열
  * @param {Map<string, PhaseResult>} phaseMap - Phase 분류 결과 맵
+ * @param {Object} options - 옵션
+ * @param {number} options.confidenceThreshold - 신뢰도 임계값 (기본 0.6)
  * @returns {string} 포맷팅된 문자열
  */
-export function formatPhaseResults(photos, phaseMap) {
+export function formatPhaseResults(photos, phaseMap, options = {}) {
+  const { confidenceThreshold = PHASE_CONFIDENCE_THRESHOLD } = options;
   const lines = ['', '📊 Phase 분류 결과:', ''];
 
   for (let i = 0; i < photos.length; i++) {
     const photo = photos[i];
     const result = phaseMap.get(photo.id) || { phase: 'unknown', phaseConfidence: 0 };
-    const phaseInfo = WHEEL_RESTORATION_PHASES[result.phase] || { name: '알 수 없음' };
+    const phaseInfo = WHEEL_RESTORATION_PHASES[result.phase] || { name: '미분류' };
     const confidence = (result.phaseConfidence * 100).toFixed(0);
 
+    // 저신뢰도 표시
+    const isLowConfidence = result.phase === 'unknown' || result.phaseConfidence < confidenceThreshold;
+    const marker = isLowConfidence ? '⚠️ ' : '';
+
     lines.push(
-      `  [${i + 1}] ${phaseInfo.name} (${confidence}%) - ${photo.title || photo.image || photo.id}`
+      `  [${i + 1}] ${marker}${phaseInfo.name} (${confidence}%) - ${photo.title || photo.image || photo.id}`
     );
   }
 
-  const stats = getPhaseStats(phaseMap);
+  const stats = getPhaseStats(phaseMap, { confidenceThreshold });
   lines.push('');
-  lines.push(`  총 ${stats.total}장: 차량 전체 ${stats.byPhase.overview}, 복원 전 ${stats.byPhase.before}, 작업 중 ${stats.byPhase.process}, 복원 후 ${stats.byPhase.after}`);
+
+  // Phase별 통계 (unknown 포함)
+  const phaseSummary = [
+    `차량 전체 ${stats.byPhase.overview}`,
+    `복원 전 ${stats.byPhase.before}`,
+    `작업 중 ${stats.byPhase.process}`,
+    `복원 후 ${stats.byPhase.after}`
+  ];
+  if (stats.byPhase.unknown > 0) {
+    phaseSummary.push(`미분류 ${stats.byPhase.unknown}`);
+  }
+  lines.push(`  총 ${stats.total}장: ${phaseSummary.join(', ')}`);
+
+  // 신뢰도 통계
+  lines.push(`  AI 분류: ${stats.highConfidenceCount}장, 원본 순서 유지: ${stats.lowConfidenceCount}장`);
   lines.push(`  평균 신뢰도: ${(stats.avgConfidence * 100).toFixed(0)}%`);
 
   return lines.join('\n');

@@ -9,7 +9,7 @@
  * - 커스텀 예시 파일 경로 지원
  */
 
-import { loadExamples, loadExamplesFromPath, buildFewShotPrompt } from './examples-loader.js';
+import { loadExamples, loadExamplesFromPath, buildFewShotPrompt, buildFewShotPromptFiltered } from './examples-loader.js';
 
 /**
  * 기본 프롬프트 지시문 (예시 없이)
@@ -247,19 +247,26 @@ export function getPrompt(type = 'default', quality = 'balanced') {
  * 2. 내장 예시 파일이 있으면 사용 (assets/prompts/examples/)
  * 3. 둘 다 없으면 하드코딩된 fallback 예시 사용
  *
+ * v3.2: P0+P1+P2 배치 컨텍스트 및 Phase 기반 예시 필터링 지원
+ *
  * @param {string} type - 템플릿 타입
  * @param {string} quality - 품질 레벨 (creative|balanced|conservative)
  * @param {Object} options - 추가 옵션
  * @param {string} options.customExamplesPath - 커스텀 예시 파일 경로
  * @param {number} options.maxExamples - 최대 예시 개수 (기본 5)
  * @param {boolean} options.includeNegative - 부정적 예시 포함 여부 (기본 true)
+ * @param {Object} options.batchContext - P0: 배치 컨텍스트 { index, total, phase, phaseInfo }
+ * @param {string[]} options.previousSubtitles - P2: 이전 자막 배열
  * @returns {string} 프롬프트 텍스트
  */
 export function getPromptWithExamples(type = 'default', quality = 'balanced', options = {}) {
   const {
     customExamplesPath = null,
     maxExamples = 5,
-    includeNegative = true
+    includeNegative = true,
+    // P0+P2: 배치 컨텍스트
+    batchContext = null,
+    previousSubtitles = []
   } = options;
 
   // 1. 기본 지시문
@@ -282,11 +289,13 @@ export function getPromptWithExamples(type = 'default', quality = 'balanced', op
   let fewShotPrompt = '';
 
   if (examplesData) {
-    // 외부 파일에서 로드된 예시 사용
-    fewShotPrompt = buildFewShotPrompt(examplesData, {
-      maxPositive: maxExamples,
+    // P1: Phase가 있으면 해당 예시만 선택
+    const phase = batchContext?.phase;
+    fewShotPrompt = buildFewShotPromptFiltered(examplesData, {
+      maxPositive: phase ? 3 : maxExamples,  // Phase 있으면 3개만
       includeNegative,
-      includeStyleGuide: true
+      includeStyleGuide: true,
+      filterPhase: phase  // P1: Phase 필터
     });
 
     // 글자 수 제한 동적 적용
@@ -302,10 +311,66 @@ export function getPromptWithExamples(type = 'default', quality = 'balanced', op
     fewShotPrompt = '\n- 한글 15-40자' + fewShotPrompt;
   }
 
-  // 4. 품질 수정자
+  // 4. P0+P2: 배치 컨텍스트 추가
+  const contextPrompt = buildBatchContextPrompt(batchContext, previousSubtitles);
+
+  // 5. 품질 수정자
   const modifier = QUALITY_MODIFIERS[quality] || '';
 
-  return baseInstruction + fewShotPrompt + modifier;
+  return baseInstruction + fewShotPrompt + contextPrompt + modifier;
+}
+
+/**
+ * 배치 컨텍스트 프롬프트 생성 (P0+P2)
+ * @param {Object} batchContext - { index, total, phase, phaseInfo }
+ * @param {string[]} previousSubtitles - 이전 자막 배열
+ * @returns {string} 컨텍스트 프롬프트
+ */
+export function buildBatchContextPrompt(batchContext, previousSubtitles = []) {
+  if (!batchContext) return '';
+
+  const { index, total, phase } = batchContext;
+  const progress = Math.round(((index + 1) / total) * 100);
+
+  // Phase 한글명 매핑
+  const phaseNames = {
+    overview: '차량 소개',
+    before: '복원 전 상태',
+    process: '작업 진행 중',
+    after: '복원 완료'
+  };
+
+  let contextPrompt = `
+
+[배치 정보]
+- 전체 사진: ${total}장
+- 현재 순번: ${index + 1}번째 (${progress}%)`;
+
+  // Phase 정보 (P1 연계)
+  if (phase) {
+    contextPrompt += `
+- 작업 단계: ${phaseNames[phase] || phase}`;
+  }
+
+  // 이전 자막 (P2)
+  if (previousSubtitles.length > 0) {
+    contextPrompt += `
+- 이전 자막들:`;
+    previousSubtitles.forEach((sub, i) => {
+      contextPrompt += `
+  ${i + 1}. "${sub}"`;
+    });
+  }
+
+  // 맥락 기반 지침
+  contextPrompt += `
+
+위 맥락을 고려하여 자막을 생성해주세요:
+- 이전 자막과 자연스럽게 이어지도록
+- 현재 작업 단계에 맞는 톤으로
+- 순번에 따라 도입부(1-10%)/중반(11-80%)/마무리(81-100%) 구분`;
+
+  return contextPrompt;
 }
 
 /**
@@ -452,7 +517,8 @@ export const WHEEL_RESTORATION_PHASES = {
   overview: { order: 1, name: '차량 전체', description: '전면/후면 전체 모습' },
   before: { order: 2, name: '복원 전', description: '거친 휠, 손상된 상태' },
   process: { order: 3, name: '작업 중', description: '세척, 도색, 가공 과정' },
-  after: { order: 4, name: '복원 후', description: '깨끗한 광택, 완료 상태' }
+  after: { order: 4, name: '복원 후', description: '깨끗한 광택, 완료 상태' },
+  unknown: { order: 99, name: '미분류', description: '분류 실패 또는 저신뢰도' }
 };
 
 /**

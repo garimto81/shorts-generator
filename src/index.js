@@ -10,7 +10,7 @@ import { generateThumbnail, generateBestThumbnail, TEXT_OVERLAY_STYLES } from '.
 import { getTemplateList, getTemplateNames, applyTemplate, TEMPLATES } from './video/templates.js';
 import { generatePreview, estimatePreviewTime, PREVIEW_PRESETS } from './video/preview.js';
 import { generateSubtitles, checkAvailability, PROMPT_TYPES, QUALITY_LEVELS } from './ai/subtitle-generator.js';
-import { classifyPhases, sortByPhase, formatPhaseResults } from './ai/phase-sorter.js';
+import { classifyPhases, sortByPhase, formatPhaseResults, getPhaseStats } from './ai/phase-sorter.js';
 import { READING_SPEED_PRESETS } from './video/duration-calculator.js';
 import { applyBeatSync, getBeatSyncSummary, BPM_PRESETS, BPM_PRESET_NAMES } from './audio/beat-sync.js';
 import { readFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
@@ -387,10 +387,17 @@ program
               }
             });
 
-            // Phase 기반 재정렬
+            // Phase 기반 재정렬 (신뢰도 필터링 적용)
             selectedPhotos = sortByPhase(selectedPhotos, phaseMap);
 
-            phaseSpinner.succeed(`AI 정렬 완료 (${phaseMap.size}장 분류)`);
+            // 통계 계산
+            const stats = getPhaseStats(phaseMap);
+            phaseSpinner.succeed(`AI 정렬 완료 (${stats.highConfidenceCount}장 분류, ${stats.lowConfidenceCount}장 원본 순서 유지)`);
+
+            // 저신뢰도 경고
+            if (stats.lowConfidenceCount > 0) {
+              console.log(chalk.yellow(`  ⚠️  ${stats.lowConfidenceCount}장은 신뢰도가 낮아 원본 순서를 유지합니다.`));
+            }
 
             // Phase 분류 결과 상세 출력 (--show-phase 옵션)
             if (options.showPhase) {

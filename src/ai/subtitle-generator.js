@@ -12,7 +12,7 @@
  * - 자동 분류 (메타데이터 → 캐시 → AI)
  */
 
-import { analyzeImageBatch, analyzeImageBatchTwoStep, isApiKeySet } from './vision.js';
+import { analyzeImageBatch, analyzeImageBatchTwoStep, isApiKeySet, extractPhaseBatch } from './vision.js';
 import { calculateDuration, parseReadingSpeed } from '../video/duration-calculator.js';
 import { PROMPT_TYPES, QUALITY_LEVELS, getAvailableExamples } from './prompt-templates.js';
 import {
@@ -49,7 +49,11 @@ export async function generateSubtitles(photos, options = {}) {
     autoClassify = false,
     twoStepAnalysis = false,
     showClassification = false,
-    onProgress
+    onProgress,
+    // P1: Phase 정보 (외부에서 전달 또는 내부 생성)
+    phaseMap = null,
+    // P0+P1: Phase 기반 컨텍스트 자막 활성화 (--ai-sort 사용 시만 true)
+    usePhaseContext = false
   } = options;
 
   // API 키 확인
@@ -71,11 +75,36 @@ export async function generateSubtitles(photos, options = {}) {
       minDuration,
       maxDuration,
       showClassification,
-      onProgress
+      onProgress,
+      phaseMap  // P1: Phase 맵 전달
     });
   }
 
+  // P0+P1: Phase 맵이 없고 컨텍스트가 활성화되어 있으면 Phase 분류 실행
+  let finalPhaseMap = phaseMap;
+  if (usePhaseContext && !finalPhaseMap && photos.length > 1) {
+    if (onProgress) {
+      onProgress('🔍 Phase 분류 중...');
+    }
+    try {
+      finalPhaseMap = await extractPhaseBatch(photos, {
+        onProgress: onProgress ? (info) => {
+          if (info.status === 'classifying') {
+            onProgress(`  [${info.current}/${info.total}] Phase 분류 중...`);
+          }
+        } : undefined
+      });
+      if (onProgress) {
+        onProgress('✅ Phase 분류 완료');
+      }
+    } catch (error) {
+      console.warn('Phase 분류 실패, 컨텍스트 없이 진행:', error.message);
+      finalPhaseMap = new Map();
+    }
+  }
+
   // 기존 방식 (v2.0): 단일 프롬프트로 분석
+  // v3.2: P0+P1+P2 배치 컨텍스트 및 Phase 정보 전달
   const progressWrapper = onProgress
     ? (info) => {
         const { current, total, photoId, status, subtitle } = info;
@@ -89,17 +118,19 @@ export async function generateSubtitles(photos, options = {}) {
       }
     : undefined;
 
-  // AI 분석 실행
+  // AI 분석 실행 (P0+P1+P2: Phase 맵 전달)
   const subtitleMap = await analyzeImageBatch(photos, {
     promptTemplate,
     quality,
     customExamplesPath,
-    onProgress: progressWrapper
+    onProgress: progressWrapper,
+    phaseMap: finalPhaseMap || new Map()  // P1: Phase 정보 전달
   });
 
   // 결과 적용
   const enrichedPhotos = photos.map(photo => {
     const aiSubtitle = subtitleMap.get(photo.id);
+    const phaseInfo = finalPhaseMap?.get(photo.id);
 
     // 자막 우선순위: AI 생성 > 원본 title > 그룹명
     const finalSubtitle = aiSubtitle || photo.title || photo.groupTitle || '';
@@ -115,7 +146,9 @@ export async function generateSubtitles(photos, options = {}) {
       ...photo,
       aiSubtitle,
       finalSubtitle,
-      dynamicDuration
+      dynamicDuration,
+      // P1: Phase 정보 추가
+      phase: phaseInfo?.phase || null
     };
   });
 
@@ -138,7 +171,9 @@ async function generateSubtitlesTwoStep(photos, options = {}) {
     minDuration = 2.0,
     maxDuration = 6.0,
     showClassification = false,
-    onProgress
+    onProgress,
+    // P1: Phase 맵 (외부에서 전달)
+    phaseMap = null
   } = options;
 
   if (onProgress) {

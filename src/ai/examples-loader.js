@@ -163,6 +163,110 @@ export function buildFewShotPrompt(examplesData, options = {}) {
 
 
 /**
+ * Phase 기반 필터링된 Few-Shot 프롬프트 구성 (P1)
+ * @param {Object} examplesData - 로드된 예시 데이터
+ * @param {Object} options - 옵션
+ * @param {number} options.maxPositive - 최대 긍정 예시 개수 (기본 5)
+ * @param {boolean} options.includeNegative - 부정 예시 포함 여부 (기본 true)
+ * @param {boolean} options.includeStyleGuide - 스타일 가이드 포함 여부 (기본 true)
+ * @param {string} options.filterPhase - 필터링할 Phase (overview/before/process/after)
+ * @returns {string} 구성된 Few-Shot 프롬프트
+ */
+export function buildFewShotPromptFiltered(examplesData, options = {}) {
+  const {
+    maxPositive = 5,
+    includeNegative = true,
+    includeStyleGuide = true,
+    filterPhase = null
+  } = options;
+
+  const { examples, styleGuide } = examplesData;
+  let prompt = '';
+
+  // Phase-Tag 매핑 (wheelRestoration.json 태그 구조에 맞춤)
+  const phaseTags = {
+    overview: ['intro', 'customer-wish'],
+    before: ['inspection', 'damage', 'before', 'professional'],
+    process: ['process', 'cleaning', 'precision', 'skill'],
+    after: ['finishing', 'result', 'satisfaction', 'performance', 'expertise', 'detail', 'protection', 'durability']
+  };
+
+  // 긍정적 예시 필터링
+  if (examples.positive?.length) {
+    let positiveExamples = examples.positive;
+
+    // P1: Phase 필터링
+    if (filterPhase && phaseTags[filterPhase]) {
+      const targetTags = phaseTags[filterPhase];
+      positiveExamples = examples.positive.filter(ex =>
+        ex.tags?.some(tag => targetTags.includes(tag))
+      );
+
+      // 필터 결과가 너무 적으면 전체 예시로 fallback
+      if (positiveExamples.length < 2) {
+        positiveExamples = examples.positive;
+      }
+    }
+
+    // Phase별 라벨 생성
+    const phaseLabels = {
+      overview: '차량 소개',
+      before: '복원 전 상태',
+      process: '작업 과정',
+      after: '복원 완료'
+    };
+
+    const phaseLabel = filterPhase
+      ? `[${phaseLabels[filterPhase] || filterPhase} 단계 예시]`
+      : '[좋은 자막 예시]';
+
+    prompt += `\n${phaseLabel}\n`;
+    positiveExamples.slice(0, maxPositive).forEach(ex => {
+      const context = ex.context ? ` (${ex.context})` : '';
+      prompt += `- "${ex.caption}"${context}\n`;
+    });
+  }
+
+  // 부정적 예시 (기존 로직 유지)
+  if (includeNegative && examples.negative?.length) {
+    prompt += '\n[피해야 할 표현]\n';
+    examples.negative.forEach(ex => {
+      const reason = ex.reason ? ` → ${ex.reason}` : '';
+      prompt += `- "${ex.caption}"${reason}\n`;
+    });
+  }
+
+  // 스타일 가이드 (기존 로직 유지)
+  if (includeStyleGuide && styleGuide) {
+    prompt += '\n[스타일 가이드]\n';
+
+    if (styleGuide.tone) {
+      prompt += `- 톤: ${styleGuide.tone}\n`;
+    }
+
+    if (styleGuide.minLength || styleGuide.maxLength) {
+      const min = styleGuide.minLength || 15;
+      const max = styleGuide.maxLength || 40;
+      prompt += `- 글자 수: ${min}-${max}자\n`;
+    }
+
+    if (styleGuide.preferWords?.length) {
+      prompt += `- 선호 단어: ${styleGuide.preferWords.slice(0, 10).join(', ')}\n`;
+    }
+
+    if (styleGuide.avoidWords?.length) {
+      prompt += `- 금지 단어: ${styleGuide.avoidWords.slice(0, 10).join(', ')}\n`;
+    }
+
+    if (styleGuide.avoidPatterns?.length) {
+      prompt += `- 금지 패턴: ${styleGuide.avoidPatterns.join(', ')}\n`;
+    }
+  }
+
+  return prompt;
+}
+
+/**
  * 예시 템플릿 정보 조회
  * @param {string} templateName - 템플릿 이름
  * @returns {Object|null} 템플릿 요약 정보

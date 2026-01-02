@@ -148,15 +148,24 @@ export async function analyzeImage(imagePath, options = {}) {
     quality = 'balanced',
     model: modelName,
     customExamplesPath = null,
-    useFewShot = true
+    useFewShot = true,
+    // P0: 배치 컨텍스트 (순번, 총 개수, Phase 정보)
+    batchContext = null,
+    // P2: 이전 자막 연결성 (최근 2-3개 자막)
+    previousSubtitles = []
   } = options;
 
   const model = getModel(modelName);
   const { data, mimeType } = await imageToBase64(imagePath);
 
   // v2.0: Few-Shot 예시 사용 여부에 따라 프롬프트 선택
+  // P0+P1+P2: 배치 컨텍스트 및 이전 자막 전달
   const prompt = useFewShot
-    ? getPromptWithExamples(promptTemplate, quality, { customExamplesPath })
+    ? getPromptWithExamples(promptTemplate, quality, {
+        customExamplesPath,
+        batchContext,
+        previousSubtitles
+      })
     : getPrompt(promptTemplate, quality);
 
   const result = await model.generateContent([
@@ -191,30 +200,50 @@ export async function analyzeImageBatch(photos, options = {}) {
     model,
     customExamplesPath = null,
     useFewShot = true,
-    delayMs = 1000, // rate limit 방지
-    onProgress
+    delayMs = 7000, // rate limit 방지 (분당 10회 제한)
+    onProgress,
+    // P0+P1: Phase 정보 맵 (phase-sorter 결과)
+    phaseMap = new Map()
   } = options;
 
   const results = new Map();
   const total = photos.length;
+  const subtitleHistory = [];  // P2: 이전 자막 기록
 
   for (let i = 0; i < total; i++) {
     const photo = photos[i];
+    const phaseInfo = phaseMap.get(photo.id);  // P1: Phase 정보 조회
 
     try {
       if (onProgress) {
         onProgress({ current: i + 1, total, photoId: photo.id, status: 'analyzing' });
       }
 
+      // P0: 배치 컨텍스트 구성
+      const batchContext = {
+        index: i,
+        total,
+        phase: phaseInfo?.phase || null,
+        phaseInfo: phaseInfo || null
+      };
+
+      // P2: 최근 3개 자막 (null 제외)
+      const previousSubtitles = subtitleHistory
+        .filter(s => s != null)
+        .slice(-3);
+
       const subtitle = await analyzeImage(photo.localPath, {
         promptTemplate,
         quality,
         model,
         customExamplesPath,
-        useFewShot
+        useFewShot,
+        batchContext,
+        previousSubtitles
       });
 
       results.set(photo.id, subtitle);
+      subtitleHistory.push(subtitle);  // P2: 기록 추가
 
       if (onProgress) {
         onProgress({ current: i + 1, total, photoId: photo.id, status: 'done', subtitle });
@@ -227,6 +256,7 @@ export async function analyzeImageBatch(photos, options = {}) {
     } catch (error) {
       console.warn(`AI 분석 실패 (${photo.id}): ${error.message}`);
       results.set(photo.id, null); // 실패 시 null
+      subtitleHistory.push(null);  // P2: 실패해도 기록 (순서 유지)
 
       if (onProgress) {
         onProgress({ current: i + 1, total, photoId: photo.id, status: 'error', error: error.message });
@@ -500,21 +530,50 @@ export async function analyzeImageBatchTwoStep(photos, options = {}) {
 // ============================================================
 
 /**
+ * Phase 분류용 배치 컨텍스트 프롬프트 생성
+ * @param {Object} context - { index, total, originalFilename }
+ * @returns {string} 컨텍스트 프롬프트
+ */
+function buildPhaseContextPrompt(context) {
+  if (!context) return '';
+
+  const { index, total, originalFilename } = context;
+  const position = index === 0 ? '첫 번째' :
+                   index === total - 1 ? '마지막' :
+                   `${index + 1}번째`;
+
+  return `[배치 정보]
+- 전체 ${total}장 중 ${position} 이미지
+- 파일명 힌트: ${originalFilename || '없음'}
+
+위 정보를 참고하여 작업 단계를 분류해주세요.
+첫 번째 이미지는 overview/before일 가능성이 높고, 마지막은 after일 가능성이 높습니다.
+
+`;
+}
+
+/**
  * 단일 이미지 Phase 추출
  * @param {string} imagePath - 이미지 파일 경로
  * @param {Object} options - 옵션
  * @param {string} options.model - Gemini 모델 이름
+ * @param {Object} options.batchContext - 배치 컨텍스트 { index, total, originalFilename }
  * @returns {Promise<Object>} Phase 분류 결과
  */
 export async function extractPhaseFeatures(imagePath, options = {}) {
-  const { model: modelName } = options;
+  const { model: modelName, batchContext = null } = options;
 
   const model = getModel(modelName);
   const { data, mimeType } = await imageToBase64(imagePath);
 
+  // 배치 컨텍스트가 있으면 프롬프트에 추가
+  const contextualPrompt = batchContext
+    ? buildPhaseContextPrompt(batchContext) + PHASE_EXTRACTION_PROMPT
+    : PHASE_EXTRACTION_PROMPT;
+
   const result = await model.generateContent([
     { inlineData: { mimeType, data } },
-    PHASE_EXTRACTION_PROMPT
+    contextualPrompt
   ]);
 
   const response = result.response;
@@ -523,17 +582,17 @@ export async function extractPhaseFeatures(imagePath, options = {}) {
   const parsed = parseJSONResponse(text);
 
   if (!parsed) {
-    // 파싱 실패 시 기본값 반환
+    // 파싱 실패 시 unknown 반환 (기존: 'after')
     return {
-      phase: 'after',  // 기본값: 복원 후 (가장 일반적인 결과물)
-      phaseConfidence: 0.5,
-      phaseReason: 'JSON 파싱 실패, 기본값 사용'
+      phase: 'unknown',
+      phaseConfidence: 0,
+      phaseReason: 'JSON 파싱 실패'
     };
   }
 
-  // phase 값 검증
-  const validPhases = Object.keys(WHEEL_RESTORATION_PHASES);
-  const phase = validPhases.includes(parsed.phase) ? parsed.phase : 'after';
+  // phase 값 검증 (unknown 제외한 유효 Phase만)
+  const validPhases = ['overview', 'before', 'process', 'after'];
+  const phase = validPhases.includes(parsed.phase) ? parsed.phase : 'unknown';
 
   return {
     phase,
@@ -554,7 +613,7 @@ export async function extractPhaseFeatures(imagePath, options = {}) {
 export async function extractPhaseBatch(photos, options = {}) {
   const {
     model: modelName,
-    delayMs = 1000,
+    delayMs = 7000, // rate limit 방지 (분당 10회 제한)
     onProgress
   } = options;
 
@@ -575,7 +634,17 @@ export async function extractPhaseBatch(photos, options = {}) {
         });
       }
 
-      const phaseResult = await extractPhaseFeatures(photo.localPath, { model: modelName });
+      // 배치 컨텍스트 생성
+      const batchContext = {
+        index: i,
+        total,
+        originalFilename: photo.image || photo.title || ''
+      };
+
+      const phaseResult = await extractPhaseFeatures(photo.localPath, {
+        model: modelName,
+        batchContext
+      });
       results.set(photo.id, phaseResult);
 
       if (onProgress) {
@@ -595,10 +664,10 @@ export async function extractPhaseBatch(photos, options = {}) {
       }
     } catch (error) {
       console.warn(`Phase 분류 실패 (${photo.id}): ${error.message}`);
-      // 실패 시 기본값 사용
+      // 실패 시 unknown 사용 (기존: 'after')
       results.set(photo.id, {
-        phase: 'after',
-        phaseConfidence: 0.3,
+        phase: 'unknown',
+        phaseConfidence: 0,
         phaseReason: `분류 실패: ${error.message}`
       });
 
