@@ -367,6 +367,9 @@ program
       }
       downloadSpinner.succeed('이미지 다운로드 완료');
 
+      // #22: phaseMap을 외부 스코프에 선언하여 자막 생성에서 재사용
+      let phaseMap = null;
+
       // AI 기반 Phase 정렬 (--ai-sort 옵션)
       if (options.aiSort) {
         const aiCheck = checkAvailability();
@@ -377,7 +380,7 @@ program
           const phaseSpinner = ora('AI 작업 단계 분류 중...').start();
           try {
             // Phase 분류
-            const phaseMap = await classifyPhases(selectedPhotos, {
+            phaseMap = await classifyPhases(selectedPhotos, {
               useMetadataHint: true,
               delayMs: 1000,
               onProgress: (progress) => {
@@ -441,6 +444,9 @@ program
               autoClassify: options.autoClassify || false,
               twoStepAnalysis: options.autoClassify || false,
               showClassification: options.showClassification || false,
+              // #22: Phase 분류 결과를 자막 생성에 전달하여 이미지-자막 일치성 향상
+              phaseMap: phaseMap,
+              usePhaseContext: !!phaseMap,
               onProgress: (msg) => {
                 aiSpinner.text = `🤖 AI 자막 생성 중... ${msg}`;
               }
