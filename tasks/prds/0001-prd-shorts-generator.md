@@ -174,6 +174,8 @@ AI 이미지 분석 → 마케팅 문구 자동 생성 → 자막 오버레이
 | 한글 폰트 | NotoSansKR-Bold | ✅ |
 | 동적 재생 시간 | 읽기 속도 기반 | ✅ |
 | AI 이미지 정렬 | 작업 단계 기반 순서 정렬 | ✅ |
+| **자막 디자인 개선** | 스타일 프리셋, 그림자, 테두리 강화 | ⏳ #23 |
+| **자막 줄바꿈 개선** | 한글 조사 분리 방지, 의미 단위 줄바꿈 | ⏳ #23 |
 
 ### 5.3 CLI
 
@@ -252,6 +254,33 @@ node src/index.js create --auto --ai-sort --show-phase
 - `src/ai/vision.js` - Gemini Vision API 연동
 - `src/ai/prompt-templates.js` - 분류 프롬프트
 - `assets/prompts/examples/wheelRestoration.json` - Few-Shot 예시
+
+### 5.7 자막 퀄리티 개선 ⏳ (Issue #23)
+
+자막 시각적 품질 및 가독성 향상
+
+#### 디자인 개선
+
+| 항목 | 현재 | 개선 목표 |
+|------|------|----------|
+| 테두리 | borderw=3 | borderw=4~5 |
+| 그림자 | 비활성화 | 기본 활성화 |
+| 스타일 프리셋 | 1종 (기본) | 5종 (bold, elegant, cinematic 등) |
+| 폰트 크기 | 60px 고정 | 텍스트 길이 기반 동적 조절 |
+
+#### 줄바꿈 개선
+
+| 항목 | 현재 | 개선 목표 |
+|------|------|----------|
+| 최대 글자수 | 15자 고정 | 화면 비율 기반 동적 |
+| 한글 조사 | 분리됨 | 분리 방지 (-은/는/이/가/을/를) |
+| 줄바꿈 기준 | 글자 수 | 의미 단위 (쉼표, 마침표) |
+| 최대 줄 수 | 제한 없음 | 3줄 제한 |
+
+**관련 파일**:
+- `src/video/subtitle.js` - 자막 포맷팅
+- `src/video/generator.js` - FFmpeg drawtext 필터
+- `src/video/templates.js` - 자막 스타일 정의
 
 ---
 
@@ -351,6 +380,7 @@ PocketBase ──▶ fetchPhotos() ──▶ downloadImage()
 | MVP | 영상 완성 | ✅ 완료 | FFmpeg 직접 호출 |
 | 2 | BGM 삽입 | ✅ 완료 | 랜덤/기본/페이드인 |
 | 3 | 자막 삽입 | ✅ 완료 | Gemini Vision |
+| 3.1 | **자막 퀄리티 개선** | ⏳ 진행 중 | Issue #23 |
 | 4 | 음성 삽입 | ⏳ 대기 | Edge-TTS 예정 |
 | 5 | 업로드 기능 | ⏳ 대기 | YouTube/TikTok |
 
