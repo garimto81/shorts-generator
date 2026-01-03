@@ -36,8 +36,10 @@
   "ai": {
     "enabled": false,
     "provider": "gemini",
-    "model": "gemini-2.0-flash-exp",
-    "promptTemplate": "default"
+    "model": "gemini-2.0-flash",
+    "promptTemplate": "default",
+    "maxRetries": 3,
+    "retryDelayMs": 10000
   },
   "dynamicDuration": {
     "enabled": false,

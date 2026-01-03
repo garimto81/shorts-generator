@@ -1,68 +1,158 @@
 {
   "templateName": "wheelRestoration",
-  "version": "1.0",
-  "description": "휠 복원 작업 마케팅 자막 - 전문성과 품질 강조 (sample.md 기반)",
+  "version": "2.0",
+  "description": "휠 복원 작업 마케팅 자막 - Phase별 스토리텔링 + 전문 용어 + 감정 표현 (sample.md 기반 v2)",
   "examples": {
     "positive": [
       {
-        "context": "차량 입고 소개",
+        "context": "차량 입고 소개 - 일반",
         "caption": "오늘 입고된 차량, 새차같은 느낌을 원하셨습니다",
-        "tags": ["intro", "customer-wish"]
+        "tags": ["overview", "intro"],
+        "phase": "overview"
       },
       {
-        "context": "휠 상태 점검",
-        "caption": "휠굴절과 크랙을 꼼꼼히 확인하고 공정에 들어갑니다",
-        "tags": ["inspection", "professional"]
+        "context": "차량 입고 소개 - 브랜드 강조",
+        "caption": "영원한 스테디셀러, BMW X5가 입고되었습니다",
+        "tags": ["overview", "brand"],
+        "phase": "overview"
       },
       {
-        "context": "샌드블라스트 작업",
-        "caption": "샌드블라스터로 유분을 완벽히 제거합니다",
-        "tags": ["process", "cleaning"]
+        "context": "차량 입고 소개 - 고급차",
+        "caption": "회장님 차의 정석, S클래스가 수술대에 올랐습니다",
+        "tags": ["overview", "luxury"],
+        "phase": "overview"
       },
       {
-        "context": "CNC 컷팅 작업",
-        "caption": "전문 CNC 기계로 정밀하게 돌려깍기를 합니다",
-        "tags": ["process", "precision"]
+        "context": "차량 입고 소개 - 스포츠카",
+        "caption": "야생마 포르쉐, 더 강렬한 포스를 원하셨습니다",
+        "tags": ["overview", "sports"],
+        "phase": "overview"
       },
       {
-        "context": "도색 작업",
-        "caption": "작업자의 숙련도가 퀄리티에 직접 영향을 미칩니다",
-        "tags": ["process", "skill"]
+        "context": "손상 상태 - 감정적 표현",
+        "caption": "명품 삼각별이 허름한 신발을 신은 듯 안타깝습니다",
+        "tags": ["before", "emotion"],
+        "phase": "before"
       },
       {
-        "context": "클리어 코팅",
-        "caption": "휠표면을 보호하는 클리어 코트로 마무리합니다",
-        "tags": ["finishing", "protection"]
+        "context": "손상 상태 - 비유적 표현",
+        "caption": "고급 세단의 스크래치, 정장에 묻은 얼룩 같습니다",
+        "tags": ["before", "metaphor"],
+        "phase": "before"
       },
       {
-        "context": "분체도색 마무리",
-        "caption": "분체도색으로 휠표면의 강성을 극대화했습니다",
-        "tags": ["finishing", "durability"]
+        "context": "손상 상태 - 심한 손상",
+        "caption": "휠 림이 깊게 패여 단순 연마로는 힘든 상황입니다",
+        "tags": ["before", "severe"],
+        "phase": "before"
       },
       {
-        "context": "작업 완료",
+        "context": "손상 상태 - 일반적 긁힘",
+        "caption": "주차 중 생긴 기스, 계속 신경 쓰이시죠",
+        "tags": ["before", "scratch"],
+        "phase": "before"
+      },
+      {
+        "context": "손상 점검 - 전문적",
+        "caption": "굴절과 크랙을 꼼꼼히 점검 후 공정에 들어갑니다",
+        "tags": ["before", "inspection"],
+        "phase": "before"
+      },
+      {
+        "context": "세척 작업 - 샌드블라스트",
+        "caption": "샌드블라스터로 타르와 유분을 완벽히 제거합니다",
+        "tags": ["process", "cleaning"],
+        "phase": "process"
+      },
+      {
+        "context": "CNC 작업 - 정밀 가공",
+        "caption": "CNC 다이아몬드 컷팅, 0.01mm 오차 없이 정밀 가공",
+        "tags": ["process", "cnc"],
+        "phase": "process"
+      },
+      {
+        "context": "CNC 작업 - 광택 강조",
+        "caption": "전문 CNC로 순정 휠 고유의 영롱한 광택을 살립니다",
+        "tags": ["process", "cnc"],
+        "phase": "process"
+      },
+      {
+        "context": "용접 작업 - 심한 손상",
+        "caption": "알루미늄 육성 용접으로 떨어진 살을 꼼꼼히 메웁니다",
+        "tags": ["process", "welding"],
+        "phase": "process"
+      },
+      {
+        "context": "도색 작업 - 숙련도 강조",
+        "caption": "도색은 작업자의 숙련도가 퀄리티를 결정합니다",
+        "tags": ["process", "painting"],
+        "phase": "process"
+      },
+      {
+        "context": "분체도장 - 내구성",
+        "caption": "180도 고온 분체도장으로 스톤칩에도 강한 내구성 확보",
+        "tags": ["process", "powder-coating"],
+        "phase": "process"
+      },
+      {
+        "context": "클리어코트 - 보호",
+        "caption": "분체클리어 도포로 휠 표면의 견고함을 더합니다",
+        "tags": ["process", "clear-coat"],
+        "phase": "process"
+      },
+      {
+        "context": "굴절 수리 - 안전",
+        "caption": "전용 장비로 굴절된 림을 정확하게 바로잡습니다",
+        "tags": ["process", "safety"],
+        "phase": "process"
+      },
+      {
+        "context": "완료 - 새휠 변신",
         "caption": "완벽하게 새휠이 되었습니다",
-        "tags": ["result", "satisfaction"]
+        "tags": ["after", "result"],
+        "phase": "after"
       },
       {
-        "context": "신차급 결과",
-        "caption": "다시금 신차급 퍼포먼스를 보여줍니다",
-        "tags": ["result", "performance"]
+        "context": "완료 - 신차급",
+        "caption": "출고 때의 그 반짝임, 다시 되찾았습니다",
+        "tags": ["after", "new-car"],
+        "phase": "after"
       },
       {
-        "context": "고객 만족",
-        "caption": "고객님도 저희도 둘다 만족한 공정이었습니다",
-        "tags": ["result", "mutual-satisfaction"]
+        "context": "완료 - 감탄 표현",
+        "caption": "감쪽같이 사라진 상처, 마술 같다는 말씀에 뿌듯합니다",
+        "tags": ["after", "satisfaction"],
+        "phase": "after"
       },
       {
-        "context": "전문성 강조",
-        "caption": "휠복원의 집도, 어설프게 하지 않습니다",
-        "tags": ["expertise", "quality"]
+        "context": "완료 - 카리스마",
+        "caption": "흑표범 같은 묵직한 카리스마가 완성되었습니다",
+        "tags": ["after", "charisma"],
+        "phase": "after"
       },
       {
-        "context": "디테일 강조",
-        "caption": "발란스까지 체크하는 섬세함이 차이를 만듭니다",
-        "tags": ["detail", "precision"]
+        "context": "완료 - 품격 회복",
+        "caption": "벤츠는 벤츠다울 때, 진정한 품격이 살아납니다",
+        "tags": ["after", "dignity"],
+        "phase": "after"
+      },
+      {
+        "context": "완료 - 고객 만족",
+        "caption": "달라진 애마에 아이처럼 기뻐하시는 차주님",
+        "tags": ["after", "customer"],
+        "phase": "after"
+      },
+      {
+        "context": "완료 - 발란스 체크",
+        "caption": "발란스까지 체크하는 섬세함, 떨림 없는 승차감",
+        "tags": ["after", "balance"],
+        "phase": "after"
+      },
+      {
+        "context": "전문성 - 차별화",
+        "caption": "휠 복원은 단순 수리가 아닌 품격을 높이는 작업입니다",
+        "tags": ["expertise", "value"],
+        "phase": "after"
       }
     ],
     "negative": [
@@ -85,25 +175,36 @@
       {
         "caption": "ㅋㅋ 이정도면 새거죠?",
         "reason": "비전문적인 어투, 신뢰도 하락"
+      },
+      {
+        "caption": "완전 대박!! 휠 복원 끝판왕",
+        "reason": "과장된 표현, 저품질 이미지"
+      },
+      {
+        "caption": "휠 수리합니다",
+        "reason": "너무 단순, 마케팅 효과 없음"
       }
     ]
   },
   "styleGuide": {
-    "tone": "professional-friendly",
-    "description": "전문성을 유지하면서도 고객과의 친근한 소통 느낌",
-    "emotionLevel": 3,
-    "minLength": 25,
-    "maxLength": 40,
+    "tone": "professional-storytelling",
+    "description": "전문성과 스토리텔링을 결합한 마케팅 톤. 감정을 자극하면서도 신뢰감을 유지",
+    "emotionLevel": 4,
+    "minLength": 15,
+    "maxLength": 35,
     "preferWords": [
       "복원", "새휠", "신차급", "퍼포먼스", "퀄리티",
       "정밀", "꼼꼼", "섬세함", "집도", "전문",
-      "클리어코트", "분체도색", "강성", "품격",
-      "CNC", "샌드블라스터", "완벽"
+      "클리어코트", "분체도장", "강성", "품격",
+      "CNC", "샌드블라스터", "다이아몬드 컷팅",
+      "광택", "영롱한", "묵직한", "카리스마",
+      "고온건조", "알루미늄 용접", "굴절", "크랙",
+      "스테디셀러", "삼각별", "야생마"
     ],
     "avoidWords": [
       "싸다", "저렴", "최저가", "No.1", "최고",
       "대박", "완전", "진짜", "개", "존나",
-      "할인", "이벤트", "무료"
+      "할인", "이벤트", "무료", "공짜"
     ],
     "avoidPatterns": [
       "!!",
@@ -113,21 +214,46 @@
       "...",
       "???",
       "지금 바로",
-      "연락주세요"
+      "연락주세요",
+      "문의주세요"
     ],
-    "sentencePatterns": [
-      "{작업명}(으)로 {효과}를 {동사}합니다",
-      "{상태}를 꼼꼼히 확인하고 {작업}에 들어갑니다",
-      "{결과물}이 되었습니다",
-      "{주체}의 {특성}이 {결과}를 만듭니다"
-    ],
-    "contextTags": {
-      "intro": "입고/소개 장면 - 고객 요청 언급",
-      "inspection": "점검 장면 - 전문 용어 사용",
-      "process": "작업 장면 - 공정 설명",
-      "finishing": "마무리 장면 - 보호/강화 강조",
-      "result": "완료 장면 - 만족감 표현",
-      "expertise": "전문성 장면 - 차별화 포인트"
+    "phaseGuidelines": {
+      "overview": {
+        "description": "차량 입고 소개 - 브랜드 특성과 고객 요청 언급",
+        "examples": ["오늘 입고된 차량", "스테디셀러", "입고되었습니다"],
+        "emotionLevel": 3
+      },
+      "before": {
+        "description": "손상 상태 - 감정적 표현으로 공감대 형성",
+        "examples": ["안타깝습니다", "신경 쓰이시죠", "속상합니다"],
+        "emotionLevel": 4
+      },
+      "process": {
+        "description": "작업 과정 - 전문 용어로 신뢰감 구축",
+        "examples": ["CNC", "분체도장", "정밀 가공", "꼼꼼히"],
+        "emotionLevel": 2
+      },
+      "after": {
+        "description": "완료 결과 - 변화의 감동과 만족감 표현",
+        "examples": ["새휠이 되었습니다", "되찾았습니다", "뿌듯합니다"],
+        "emotionLevel": 5
+      }
+    },
+    "brandExpressions": {
+      "벤츠": ["명품 삼각별", "벤츠는 벤츠다울 때", "품격"],
+      "BMW": ["스테디셀러", "드림카", "퍼포먼스"],
+      "포르쉐": ["야생마", "흑표범", "카리스마"],
+      "테슬라": ["미래지향적", "배트카", "시크함"],
+      "제네시스": ["국산 럭셔리의 자존심", "고급 세단"],
+      "아우디": ["독일 3사", "정밀함"],
+      "레인지로버": ["사막의 롤스로이스", "웅장함"],
+      "마세라티": ["달리는 예술품", "이탈리아 감성"]
+    },
+    "technicalTerms": {
+      "cleaning": ["샌드블라스터", "유분제거", "타르제거", "표면 샌딩"],
+      "machining": ["CNC 컷팅", "다이아몬드 컷팅", "정밀 선반", "0.01mm"],
+      "painting": ["분체도장", "클리어코트", "상도클리어", "고온건조(180도)"],
+      "repair": ["알루미늄 육성 용접", "굴절 수리", "크랙 점검", "발란스 체크"]
     }
   }
 }

@@ -164,6 +164,8 @@ export function buildFewShotPrompt(examplesData, options = {}) {
 
 /**
  * Phase 기반 필터링된 Few-Shot 프롬프트 구성 (P1)
+ * v2.0: phase 필드 직접 사용 + 태그 기반 fallback
+ *
  * @param {Object} examplesData - 로드된 예시 데이터
  * @param {Object} options - 옵션
  * @param {number} options.maxPositive - 최대 긍정 예시 개수 (기본 5)
@@ -183,12 +185,12 @@ export function buildFewShotPromptFiltered(examplesData, options = {}) {
   const { examples, styleGuide } = examplesData;
   let prompt = '';
 
-  // Phase-Tag 매핑 (wheelRestoration.json 태그 구조에 맞춤)
+  // Phase-Tag 매핑 (레거시 지원)
   const phaseTags = {
-    overview: ['intro', 'customer-wish'],
-    before: ['inspection', 'damage', 'before', 'professional'],
-    process: ['process', 'cleaning', 'precision', 'skill'],
-    after: ['finishing', 'result', 'satisfaction', 'performance', 'expertise', 'detail', 'protection', 'durability']
+    overview: ['intro', 'customer-wish', 'overview'],
+    before: ['inspection', 'damage', 'before', 'professional', 'scratch', 'severe'],
+    process: ['process', 'cleaning', 'precision', 'skill', 'cnc', 'welding', 'painting', 'powder-coating', 'clear-coat', 'safety'],
+    after: ['finishing', 'result', 'satisfaction', 'performance', 'expertise', 'detail', 'protection', 'durability', 'after', 'new-car', 'charisma', 'dignity', 'customer', 'balance', 'value']
   };
 
   // 긍정적 예시 필터링
@@ -196,15 +198,23 @@ export function buildFewShotPromptFiltered(examplesData, options = {}) {
     let positiveExamples = examples.positive;
 
     // P1: Phase 필터링
-    if (filterPhase && phaseTags[filterPhase]) {
-      const targetTags = phaseTags[filterPhase];
-      positiveExamples = examples.positive.filter(ex =>
-        ex.tags?.some(tag => targetTags.includes(tag))
-      );
+    if (filterPhase) {
+      // 우선: phase 필드로 직접 필터링 (v2.0)
+      const phaseFiltered = examples.positive.filter(ex => ex.phase === filterPhase);
 
-      // 필터 결과가 너무 적으면 전체 예시로 fallback
-      if (positiveExamples.length < 2) {
-        positiveExamples = examples.positive;
+      if (phaseFiltered.length >= 2) {
+        positiveExamples = phaseFiltered;
+      } else if (phaseTags[filterPhase]) {
+        // Fallback: 태그 기반 필터링 (레거시)
+        const targetTags = phaseTags[filterPhase];
+        const tagFiltered = examples.positive.filter(ex =>
+          ex.tags?.some(tag => targetTags.includes(tag))
+        );
+
+        if (tagFiltered.length >= 2) {
+          positiveExamples = tagFiltered;
+        }
+        // 둘 다 2개 미만이면 전체 예시 사용
       }
     }
 
@@ -225,6 +235,13 @@ export function buildFewShotPromptFiltered(examplesData, options = {}) {
       const context = ex.context ? ` (${ex.context})` : '';
       prompt += `- "${ex.caption}"${context}\n`;
     });
+
+    // Phase별 가이드라인 추가 (styleGuide.phaseGuidelines 활용)
+    if (filterPhase && styleGuide?.phaseGuidelines?.[filterPhase]) {
+      const phaseGuide = styleGuide.phaseGuidelines[filterPhase];
+      prompt += `\n[${phaseLabels[filterPhase]} 지침]\n`;
+      prompt += `- ${phaseGuide.description}\n`;
+    }
   }
 
   // 부정적 예시 (기존 로직 유지)

@@ -25,16 +25,35 @@ export const PHASE_CONFIDENCE_THRESHOLD = 0.6;
 
 /**
  * Phase 분류 키워드 (메타데이터 힌트용)
+ * v3.2: before/after 구분 정확도 개선
  */
 export const PHASE_KEYWORDS = {
-  overview: ['전체', '전면', '후면', '차량', 'full', 'front', 'rear', 'car'],
-  before: ['전', '손상', '스크래치', '거친', '부식', 'before', 'scratch', 'damage'],
-  process: ['작업', '세척', '도색', '가공', '마스킹', '연마', 'work', 'process', 'paint'],
-  after: ['후', '완료', '광택', '깨끗', '완성', 'after', 'complete', 'finish', 'clean']
+  overview: ['전체', '전면', '후면', '차량', '측면', 'full', 'front', 'rear', 'car', 'side'],
+  before: [
+    '손상', '스크래치', '거친', '부식', '오염', '먼지', '더러운', '변색', '벗겨짐',
+    'before', 'scratch', 'damage', 'dirty', 'rust', 'worn'
+  ],
+  process: [
+    '작업', '세척', '도색', '가공', '마스킹', '연마', '코팅', '스프레이', '폴리싱',
+    'work', 'process', 'paint', 'coating', 'polish', 'spray'
+  ],
+  after: [
+    '완료', '완성', '신품', '새것', '복원완료', '마무리',
+    'after', 'complete', 'finish', 'done', 'restored', 'final'
+  ]
+};
+
+/**
+ * Phase 제외 키워드 (이 키워드가 있으면 해당 Phase가 아님)
+ * 예: "광택"이 있어도 "코팅 중"이면 after가 아님
+ */
+export const PHASE_EXCLUDE_KEYWORDS = {
+  after: ['작업', '코팅중', '도색중', '스프레이', 'process', 'coating', 'spray']
 };
 
 /**
  * 메타데이터(파일명, 제목)에서 Phase 힌트 추출
+ * v3.2: 제외 키워드 고려
  * @param {Object} photo - 사진 객체
  * @returns {string|null} Phase 힌트 또는 null
  */
@@ -51,7 +70,15 @@ export function extractPhaseFromMetadata(photo) {
   for (const [phase, keywords] of Object.entries(PHASE_KEYWORDS)) {
     for (const keyword of keywords) {
       if (searchText.includes(keyword.toLowerCase())) {
-        return phase;
+        // 제외 키워드 확인
+        const excludeKeywords = PHASE_EXCLUDE_KEYWORDS[phase] || [];
+        const isExcluded = excludeKeywords.some(
+          excl => searchText.includes(excl.toLowerCase())
+        );
+
+        if (!isExcluded) {
+          return phase;
+        }
       }
     }
   }

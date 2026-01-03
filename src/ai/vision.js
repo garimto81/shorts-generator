@@ -44,7 +44,71 @@ function getApiKey() {
 
 // 기본 모델명: config.json에서 가져오기
 function getDefaultModel() {
-  return getConfig().ai?.model || 'gemini-2.0-flash-exp';
+  return getConfig().ai?.model || 'gemini-2.0-flash';
+}
+
+// 재시도 설정: config.json에서 가져오기
+function getRetryConfig() {
+  const config = getConfig();
+  return {
+    maxRetries: config.ai?.maxRetries || 3,
+    retryDelayMs: config.ai?.retryDelayMs || 10000
+  };
+}
+
+/**
+ * Rate limit (429) 에러 처리를 위한 재시도 래퍼
+ * Exponential backoff 적용
+ * @param {Function} fn - 실행할 비동기 함수
+ * @param {Object} options - 옵션
+ * @param {number} options.maxRetries - 최대 재시도 횟수
+ * @param {number} options.retryDelayMs - 기본 재시도 지연 (ms)
+ * @param {string} options.context - 로그용 컨텍스트
+ * @returns {Promise<any>} 함수 실행 결과
+ */
+async function withRetry(fn, options = {}) {
+  const retryConfig = getRetryConfig();
+  const {
+    maxRetries = retryConfig.maxRetries,
+    retryDelayMs = retryConfig.retryDelayMs,
+    context = 'API 호출'
+  } = options;
+
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      // 429 Rate Limit 에러인지 확인
+      const isRateLimitError = error.message?.includes('429') ||
+                               error.message?.includes('Too Many Requests') ||
+                               error.message?.includes('quota');
+
+      if (!isRateLimitError || attempt >= maxRetries) {
+        throw error;
+      }
+
+      // Exponential backoff: 10초, 20초, 40초...
+      const delay = retryDelayMs * Math.pow(2, attempt);
+
+      // 에러 메시지에서 권장 대기 시간 추출 시도
+      const retryDelayMatch = error.message?.match(/retryDelay.*?(\d+)s/);
+      const suggestedDelay = retryDelayMatch ? parseInt(retryDelayMatch[1]) * 1000 : null;
+
+      const actualDelay = suggestedDelay ? Math.max(delay, suggestedDelay) : delay;
+
+      console.warn(
+        `⚠️ Rate limit 도달 (${context}), ${Math.ceil(actualDelay / 1000)}초 후 재시도 (${attempt + 1}/${maxRetries})...`
+      );
+
+      await new Promise(resolve => setTimeout(resolve, actualDelay));
+    }
+  }
+
+  throw lastError;
 }
 
 const API_KEY = getApiKey();
@@ -168,10 +232,14 @@ export async function analyzeImage(imagePath, options = {}) {
       })
     : getPrompt(promptTemplate, quality);
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data } },
-    prompt
-  ]);
+  // withRetry로 Rate Limit 처리
+  const result = await withRetry(
+    () => model.generateContent([
+      { inlineData: { mimeType, data } },
+      prompt
+    ]),
+    { context: '자막 생성' }
+  );
 
   const response = result.response;
   const text = response.text().trim();
@@ -324,10 +392,14 @@ export async function extractImageFeatures(imagePath, options = {}) {
   const model = getModel(modelName);
   const { data, mimeType } = await imageToBase64(imagePath);
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data } },
-    FEATURE_EXTRACTION_PROMPT
-  ]);
+  // withRetry로 Rate Limit 처리
+  const result = await withRetry(
+    () => model.generateContent([
+      { inlineData: { mimeType, data } },
+      FEATURE_EXTRACTION_PROMPT
+    ]),
+    { context: '특징 추출' }
+  );
 
   const response = result.response;
   const text = response.text().trim();
@@ -423,10 +495,14 @@ export async function generateSubtitleFromFeatures(imagePath, analysis, options 
   // 특징 기반 맞춤 프롬프트 생성
   const prompt = getFeatureBasedSubtitlePrompt(analysis);
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data } },
-    prompt
-  ]);
+  // withRetry로 Rate Limit 처리
+  const result = await withRetry(
+    () => model.generateContent([
+      { inlineData: { mimeType, data } },
+      prompt
+    ]),
+    { context: '특징 기반 자막 생성' }
+  );
 
   const response = result.response;
   const text = response.text().trim();
@@ -571,10 +647,14 @@ export async function extractPhaseFeatures(imagePath, options = {}) {
     ? buildPhaseContextPrompt(batchContext) + PHASE_EXTRACTION_PROMPT
     : PHASE_EXTRACTION_PROMPT;
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data } },
-    contextualPrompt
-  ]);
+  // withRetry로 Rate Limit 처리
+  const result = await withRetry(
+    () => model.generateContent([
+      { inlineData: { mimeType, data } },
+      contextualPrompt
+    ]),
+    { context: 'Phase 분류' }
+  );
 
   const response = result.response;
   const text = response.text().trim();
