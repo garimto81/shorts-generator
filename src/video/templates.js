@@ -216,9 +216,12 @@ export const SUBTITLE_POSITIONS = {
 export const SUBTITLE_STYLES = {
   default: {
     fontSize: 60,
-    borderWidth: 3,
+    borderWidth: 4,            // Issue #23: 3 → 4 (가독성 향상)
     backgroundColor: null,
-    shadow: false
+    shadow: true,              // Issue #23: 기본 그림자 활성화
+    shadowX: 2,
+    shadowY: 2,
+    shadowColor: '0x00000080'  // 50% 투명도 검정
   },
   bold: {
     fontSize: 70,
