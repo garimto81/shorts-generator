@@ -1,7 +1,7 @@
 # PRD: Shorts Generator
 
-**Version**: 2.0
-**Date**: 2025-12-29
+**Version**: 3.0
+**Date**: 2026-01-03
 **Status**: Active
 
 ---
@@ -210,8 +210,10 @@ node src/index.js create --auto --ai-sort --show-phase
   "ai": {
     "enabled": false,
     "provider": "gemini",
-    "model": "gemini-2.0-flash-exp",
-    "promptTemplate": "default"
+    "model": "gemini-2.0-flash",
+    "promptTemplate": "default",
+    "maxRetries": 3,
+    "retryDelayMs": 10000
   },
   "dynamicDuration": {
     "enabled": false,
@@ -222,7 +224,7 @@ node src/index.js create --auto --ai-sort --show-phase
 }
 ```
 
-### 5.6 AI 이미지 정렬
+### 5.6 AI 이미지 정렬 (v3.2)
 
 휠 복원 작업 흐름에 맞게 이미지 순서 자동 정렬
 
@@ -235,10 +237,21 @@ node src/index.js create --auto --ai-sort --show-phase
 
 **처리 흐름**:
 1. 파일명 기반 기본 정렬
-2. AI가 각 이미지의 작업 단계(phase) 분류
-3. Phase 순서대로 자동 재정렬
+2. 메타데이터 힌트 추출 (파일명/제목 기반)
+3. AI가 각 이미지의 작업 단계(phase) 분류
+4. Phase 순서대로 자동 재정렬
 
-**관련 파일**: `src/ai/phase-sorter.js`
+**v3.2 개선사항**:
+- before/after 구분 정확도 향상 (제외 키워드 도입)
+- Phase 분류 프롬프트 판단 로직 명확화
+- Rate Limit (429) 에러 재시도 로직 (Exponential Backoff)
+- 예시 데이터 확대 (wheelRestoration v2.0)
+
+**관련 파일**:
+- `src/ai/phase-sorter.js` - Phase 분류 및 정렬
+- `src/ai/vision.js` - Gemini Vision API 연동
+- `src/ai/prompt-templates.js` - 분류 프롬프트
+- `assets/prompts/examples/wheelRestoration.json` - Few-Shot 예시
 
 ---
 
@@ -354,6 +367,23 @@ field-uploader에서 업로드한 사진을 shorts-generator에서 영상으로 
 ---
 
 ## 11. Changelog
+
+### v3.0 (2026-01-03)
+- ✅ AI Phase 분류 정확도 대폭 개선 (v3.2)
+  - before/after 구분 정확도 향상 (제외 키워드 도입)
+  - Phase 분류 프롬프트 판단 로직 명확화
+  - Rate Limit (429) 에러 재시도 로직 추가
+- ✅ 예시 데이터 확대 (wheelRestoration v2.0)
+  - Phase별 positive 예시 대폭 확대
+  - 브랜드별 표현 (벤츠/BMW/포르쉐 등) 추가
+  - 전문 용어 사전 추가
+- ✅ API 안정성 강화
+  - 모델명 gemini-2.0-flash로 변경 (안정 버전)
+  - Exponential backoff 재시도 (10초, 20초, 40초)
+- ✅ 테스트 확대
+  - phase-sorter 테스트 32개 추가
+  - 총 테스트 100개 (68개 → 100개)
+- ✅ Issue #21, #22 해결 완료
 
 ### v2.0 (2025-12-29)
 - ✅ BGM 시작 잡음 제거 (afade 필터)
