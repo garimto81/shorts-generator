@@ -2,7 +2,12 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { mkdirSync, existsSync, writeFileSync, unlinkSync } from 'fs';
 import { spawn } from 'child_process';
-import { formatSubtitle, SUBTITLE_STYLE } from './subtitle.js';
+import {
+  formatSubtitle,
+  SUBTITLE_STYLE,
+  calculateDynamicFontSize,
+  splitAtMeaningfulBoundary
+} from './subtitle.js';
 import { SUBTITLE_POSITIONS, SUBTITLE_STYLES } from './templates.js';
 import { generateIntroFilter, generateOutroFilter, INTRO_OUTRO_PRESETS, INTRO_OUTRO_PRESET_NAMES } from './intro-outro.js';
 import { SUBTITLE_ANIMATIONS, getFadeInAlpha } from './subtitle-animation.js';
@@ -386,27 +391,40 @@ export async function generateVideo(photos, options = {}) {
     const photo = photos[i];
     // 자막 우선순위: finalSubtitle (AI) > title > groupTitle
     const subtitleText = photo.finalSubtitle || photo.title || photo.groupTitle || '';
-    const subtitle = subtitleText ? formatSubtitle(subtitleText, 15) : '';
+
+    // 의미 단위 줄바꿈 적용 (2배 폰트에 맞춰 12자 기준)
+    const subtitle = subtitleText
+      ? splitAtMeaningfulBoundary(subtitleText, 12, { maxLines: 3 })
+      : '';
 
     if (subtitle) {
-      // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환)
-      let fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
+      // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환) - NotoSansKR-Black (900, 가장 굵음)
+      let fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Black.ttf';
       if (fontPath.startsWith('./')) {
         fontPath = join(__dirname, '../..', fontPath.slice(2));
       }
-      // FFmpeg drawtext: 백슬래시→슬래시, 콜론 이스케이프
+      // FFmpeg drawtext: 백슬래시→슬래시, 모든 콜론 이스케이프 (드라이브 문자 포함)
       fontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-      const fontSize = subtitleConfig.fontSize || subtitleStyle.fontSize || 60;
+
+      // 동적 폰트 크기 계산 (100px 기준, 70% 축소)
+      const baseFontSize = subtitleConfig.fontSize || subtitleStyle.fontSize || 100;
+      const fontSize = calculateDynamicFontSize(subtitleText, {
+        baseSize: baseFontSize,
+        minSize: 68,
+        maxLength: 12
+      });
+
       const textColor = hexToFFmpegColor(subtitleConfig.textColor || '#FFFFFF');
-      const borderWidth = subtitleStyle.borderWidth || 3;
+      // 테두리 (4px - Black 폰트에 맞춤)
+      const borderWidth = subtitleStyle.borderWidth || 4;
       const escapedText = escapeText(subtitle);
 
       // Position based on template setting
       const yPos = SUBTITLE_POSITIONS[subtitlePosition] || SUBTITLE_POSITIONS.bottom;
 
-      // 스타일 옵션: 배경 박스, 그림자
+      // 스타일 옵션: 배경 박스, 그림자 (기본 활성화)
       const hasBackground = subtitleStyle.backgroundColor;
-      const hasShadow = subtitleStyle.shadow;
+      const hasShadow = subtitleStyle.shadow !== false; // 기본 true
 
       let drawtextParams = `fontfile='${fontPath}':text='${escapedText}':` +
         `fontsize=${fontSize}:fontcolor=${textColor}:` +
@@ -420,11 +438,11 @@ export async function generateVideo(photos, options = {}) {
         drawtextParams += `:box=1:boxcolor=${bgColor}:boxborderw=${bgPadding}`;
       }
 
-      // 그림자 효과 추가
+      // 그림자 효과 추가 (강화된 기본값)
       if (hasShadow) {
-        const shadowX = subtitleStyle.shadowX || 3;
-        const shadowY = subtitleStyle.shadowY || 3;
-        const shadowColor = subtitleStyle.shadowColor || '0x00000080';
+        const shadowX = subtitleStyle.shadowX || 4;
+        const shadowY = subtitleStyle.shadowY || 4;
+        const shadowColor = subtitleStyle.shadowColor || '0x000000AA';
         drawtextParams += `:shadowx=${shadowX}:shadowy=${shadowY}:shadowcolor=${shadowColor}`;
       }
 

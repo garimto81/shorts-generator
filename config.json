@@ -24,8 +24,8 @@
     "enabled": true
   },
   "subtitle": {
-    "font": "./assets/fonts/NotoSansKR-Bold.ttf",
-    "fontSize": 60,
+    "font": "./assets/fonts/NotoSansKR-Black.ttf",
+    "fontSize": 100,
     "textColor": "#FFFFFF",
     "backgroundColor": "rgba(0,0,0,0.6)"
   },

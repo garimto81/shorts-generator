@@ -200,89 +200,115 @@ export function applyTemplate(config, templateName) {
  * Subtitle position configurations
  *
  * Safe Zone 적용 (TikTok/Reels/Shorts 호환):
- * - top: 상단 240px (h/8) - UI 버튼 영역 피함
+ * - top: 상단 15% (h*0.15) - UI 버튼 영역 피함
  * - center: 중앙 - 가장 안전한 위치
- * - bottom: 하단 320px 여백 (h-h/6) - 하단 UI 영역 피함
+ * - bottom: 화면 60% 지점 (h*0.6) - 하단 672px 여백 확보
+ *
+ * 참고: YouTube Shorts Safe Zone
+ * - 하단 672px (35%) 여백 권장
+ * - 자막은 화면 중앙 70% 영역에 배치
  */
 export const SUBTITLE_POSITIONS = {
-  top: 'h/8',              // 240px (이전: 192px)
-  center: '(h-text_h)/2',
-  bottom: 'h-h/6'          // 1600px (이전: 1728px) - 320px 하단 여백
+  top: 'h*0.15',           // 상단 15% (288px)
+  center: '(h-text_h)/2',  // 정중앙
+  bottom: 'h*0.6'          // 화면 60% 지점 (1152px) - 하단 768px 여백
 };
 
 /**
  * Subtitle style configurations
  */
 export const SUBTITLE_STYLES = {
+  // 기본 스타일 - 강화된 가독성
   default: {
-    fontSize: 60,
-    borderWidth: 4,            // Issue #23: 3 → 4 (가독성 향상)
+    fontSize: 72,              // 60 → 72 (더 큰 폰트)
+    borderWidth: 5,            // 4 → 5 (더 두꺼운 테두리)
     backgroundColor: null,
-    shadow: true,              // Issue #23: 기본 그림자 활성화
+    shadow: true,
+    shadowX: 4,                // 2 → 4 (더 강한 그림자)
+    shadowY: 4,
+    shadowColor: '0x000000AA'  // 67% 투명도 (더 진하게)
+  },
+  // 강조 스타일 - 임팩트 있는 자막
+  bold: {
+    fontSize: 80,              // 70 → 80
+    borderWidth: 6,            // 4 → 6
+    backgroundColor: null,
+    shadow: true,              // false → true
+    shadowX: 5,
+    shadowY: 5,
+    shadowColor: '0x000000CC'
+  },
+  // 미니멀 스타일 - 깔끔한 느낌
+  minimal: {
+    fontSize: 56,              // 50 → 56
+    borderWidth: 3,            // 2 → 3
+    backgroundColor: null,
+    shadow: true,              // false → true
     shadowX: 2,
     shadowY: 2,
-    shadowColor: '0x00000080'  // 50% 투명도 검정
+    shadowColor: '0x00000066'
   },
-  bold: {
-    fontSize: 70,
-    borderWidth: 4,
-    backgroundColor: null,
-    shadow: false
-  },
-  minimal: {
-    fontSize: 50,
-    borderWidth: 2,
-    backgroundColor: null,
-    shadow: false
-  },
+  // 우아한 스타일 - 세련된 느낌
   elegant: {
-    fontSize: 55,
-    borderWidth: 2,
+    fontSize: 64,              // 55 → 64
+    borderWidth: 3,            // 2 → 3
     backgroundColor: null,
-    shadow: false
-  },
-  cinematic: {
-    fontSize: 65,
-    borderWidth: 3,
-    backgroundColor: null,
-    shadow: true,
+    shadow: true,              // false → true
     shadowX: 3,
-    shadowY: 3
+    shadowY: 3,
+    shadowColor: '0x00000088'
   },
-  contrast: {
-    fontSize: 65,
-    borderWidth: 4,
-    backgroundColor: null,
-    shadow: false
-  },
-  // 새 스타일: 반투명 배경 박스
-  boxed: {
-    fontSize: 60,
-    borderWidth: 2,
-    backgroundColor: '0x00000099',  // 검정 60% 투명도
-    backgroundPadding: 15,
-    shadow: false
-  },
-  // 새 스타일: 그림자 효과
-  shadow: {
-    fontSize: 60,
-    borderWidth: 2,
+  // 시네마틱 스타일 - 영화같은 분위기
+  cinematic: {
+    fontSize: 68,              // 65 → 68
+    borderWidth: 4,            // 3 → 4
     backgroundColor: null,
     shadow: true,
+    shadowX: 5,                // 3 → 5
+    shadowY: 5,
+    shadowColor: '0x000000BB'
+  },
+  // 고대비 스타일 - 강한 대비
+  contrast: {
+    fontSize: 72,              // 65 → 72
+    borderWidth: 6,            // 4 → 6
+    backgroundColor: null,
+    shadow: true,              // false → true
     shadowX: 4,
     shadowY: 4,
-    shadowColor: '0x00000080'
+    shadowColor: '0x000000CC'
   },
-  // 새 스타일: 배경 + 그림자 조합
-  boxedShadow: {
-    fontSize: 60,
-    borderWidth: 2,
-    backgroundColor: '0x00000080',  // 검정 50% 투명도
-    backgroundPadding: 12,
+  // 박스 스타일 - 반투명 배경
+  boxed: {
+    fontSize: 68,              // 60 → 68
+    borderWidth: 3,            // 2 → 3
+    backgroundColor: '0x000000BB',  // 73% 투명도 (더 진하게)
+    backgroundPadding: 18,     // 15 → 18
+    shadow: true,              // false → true
+    shadowX: 3,
+    shadowY: 3,
+    shadowColor: '0x00000066'
+  },
+  // 그림자 강조 스타일
+  shadow: {
+    fontSize: 68,              // 60 → 68
+    borderWidth: 4,            // 2 → 4
+    backgroundColor: null,
     shadow: true,
-    shadowX: 2,
-    shadowY: 2,
-    shadowColor: '0x00000060'
+    shadowX: 6,                // 4 → 6
+    shadowY: 6,
+    shadowColor: '0x000000BB'  // 더 진한 그림자
+  },
+  // 최고 가독성 스타일 - 박스 + 그림자 조합
+  boxedShadow: {
+    fontSize: 68,              // 60 → 68
+    borderWidth: 3,            // 2 → 3
+    backgroundColor: '0x000000AA',  // 67% 투명도
+    backgroundPadding: 16,     // 12 → 16
+    shadow: true,
+    shadowX: 4,                // 2 → 4
+    shadowY: 4,
+    shadowColor: '0x00000088'
   }
 };
 

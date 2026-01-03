@@ -2,7 +2,11 @@ import { dirname, basename, join } from 'path';
 import { fileURLToPath } from 'url';
 import { mkdirSync, existsSync } from 'fs';
 import { spawn } from 'child_process';
-import { formatSubtitle } from './subtitle.js';
+import {
+  formatSubtitle,
+  splitAtMeaningfulBoundary,
+  calculateDynamicFontSize
+} from './subtitle.js';
 import { SUBTITLE_POSITIONS, SUBTITLE_STYLES } from './templates.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -172,28 +176,53 @@ export async function generatePreview(photos, options = {}) {
   // 2. Add subtitles (simplified for preview)
   for (let i = 0; i < photoCount; i++) {
     const photo = photos[i];
-    const subtitle = photo.title ? formatSubtitle(photo.title, 15) : '';
+    // 자막 우선순위: finalSubtitle (AI) > title > groupTitle
+    const subtitleText = photo.finalSubtitle || photo.title || photo.groupTitle || '';
+
+    // 의미 단위 줄바꿈 적용 (2배 폰트에 맞춰 12자 기준)
+    const subtitle = subtitleText
+      ? splitAtMeaningfulBoundary(subtitleText, 12, { maxLines: 3 })
+      : '';
 
     if (subtitle) {
-      // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환)
-      let fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Bold.otf';
+      // 폰트 경로를 절대 경로로 변환 (FFmpeg 호환) - NotoSansKR-Black (900, 가장 굵음)
+      let fontPath = subtitleConfig.font || './assets/fonts/NotoSansKR-Black.ttf';
       if (fontPath.startsWith('./')) {
         fontPath = join(__dirname, '../..', fontPath.slice(2));
       }
-      // FFmpeg drawtext: 백슬래시→슬래시, 콜론 이스케이프
+      // FFmpeg drawtext: 백슬래시→슬래시, 모든 콜론 이스케이프 (드라이브 문자 포함)
       fontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-      const fontSize = Math.floor((subtitleConfig.fontSize || subtitleStyle.fontSize || 60) * (width / 1080));
+
+      // 동적 폰트 크기 계산 (100px 기준, 70% 축소)
+      const baseFontSize = subtitleConfig.fontSize || subtitleStyle.fontSize || 100;
+      const dynamicSize = calculateDynamicFontSize(subtitleText, {
+        baseSize: baseFontSize,
+        minSize: 68,
+        maxLength: 12
+      });
+      const fontSize = Math.floor(dynamicSize * (width / 1080));
+
       const textColor = hexToFFmpegColor(subtitleConfig.textColor || '#FFFFFF');
-      const borderWidth = Math.max(1, Math.floor((subtitleStyle.borderWidth || 3) * (width / 1080)));
+      // 테두리 (4px - Black 폰트에 맞춤)
+      const borderWidth = Math.max(2, Math.floor((subtitleStyle.borderWidth || 4) * (width / 1080)));
       const escapedText = escapeText(subtitle);
       const yPos = SUBTITLE_POSITIONS[subtitlePosition] || SUBTITLE_POSITIONS.bottom;
 
-      filters.push(
-        `[v${i}]drawtext=fontfile='${fontPath}':text='${escapedText}':` +
+      // 그림자 효과 추가
+      const hasShadow = subtitleStyle.shadow !== false;
+      let drawtextParams = `fontfile='${fontPath}':text='${escapedText}':` +
         `fontsize=${fontSize}:fontcolor=${textColor}:` +
         `borderw=${borderWidth}:bordercolor=black:` +
-        `x=(w-text_w)/2:y=${yPos}[vt${i}]`
-      );
+        `x=(w-text_w)/2:y=${yPos}`;
+
+      if (hasShadow) {
+        const shadowX = Math.max(1, Math.floor((subtitleStyle.shadowX || 4) * (width / 1080)));
+        const shadowY = Math.max(1, Math.floor((subtitleStyle.shadowY || 4) * (width / 1080)));
+        const shadowColor = subtitleStyle.shadowColor || '0x000000AA';
+        drawtextParams += `:shadowx=${shadowX}:shadowy=${shadowY}:shadowcolor=${shadowColor}`;
+      }
+
+      filters.push(`[v${i}]drawtext=${drawtextParams}[vt${i}]`);
     } else {
       filters.push(`[v${i}]null[vt${i}]`);
     }
